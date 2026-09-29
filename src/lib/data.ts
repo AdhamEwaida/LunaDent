@@ -1,18 +1,18 @@
-// LunaDent Studio — Complete Platform Data
+// LunaDent Dental Clinic — public website content
 
 export const BRAND = {
-  name: "LunaDent Studio",
-  tagline: "A Softer, Smarter Way to Transform Your Smile",
-  subtitle: "Experience premium dental care designed around comfort, confidence, digital planning, and beautiful long-lasting results.",
-  phone: "+1 (800) 586-2636",
-  email: "hello@lunadent.studio",
-  address: "88 Crescent Avenue, Suite 400, Beverly Hills, CA 90210",
-  hours: "Mon–Fri: 9AM–7PM | Sat: 9AM–4PM",
-  whatsapp: "https://wa.me/18005862636",
-  instagram: "#",
-  facebook: "#",
-  youtube: "#",
-  tiktok: "#",
+  name: "LunaDent Dental Clinic",
+  tagline: "Modern Dental Care, Built Around You",
+  subtitle: "Thoughtful dental care supported by online booking, secure patient access, and digital treatment planning.",
+  phone: "",
+  email: "",
+  address: "",
+  hours: "",
+  whatsapp: "",
+  instagram: "",
+  facebook: "",
+  youtube: "",
+  tiktok: "",
 };
 
 export const IMAGES = {
@@ -37,30 +37,38 @@ export const IMAGES = {
 };
 
 export const TREATMENTS = [
-  { id: 1, name: "Dental Implants", desc: "Permanent, natural-looking tooth replacement with titanium precision and aesthetic excellence.", icon: "🦷", img: "https://images.unsplash.com/photo-1606811841689-23dfddce3e95?w=600&q=80&auto=format&fit=crop", color: "#3B1E54", duration: "1–3 sessions", price: "From $2,800" },
-  { id: 2, name: "Hollywood Smile", desc: "Complete smile transformation with custom veneers designed to your perfect aesthetic.", icon: "✨", img: "https://images.unsplash.com/photo-1489278353717-f64c6ee8a4d2?w=600&q=80&auto=format&fit=crop", color: "#B96A8D", duration: "2 sessions", price: "From $4,200" },
-  { id: 3, name: "Porcelain Veneers", desc: "Ultra-thin shells crafted for natural beauty, stain resistance, and long-lasting perfection.", icon: "💎", img: "https://images.unsplash.com/photo-1567516364473-233c4b6fcfbe?w=600&q=80&auto=format&fit=crop", color: "#D7B98E", duration: "2 sessions", price: "From $1,200" },
-  { id: 4, name: "Cosmetic Dentistry", desc: "Comprehensive aesthetic dental services tailored to elevate your smile's beauty.", icon: "🌸", img: "https://images.unsplash.com/photo-1694858840665-cabf47653213?w=600&q=80&auto=format&fit=crop", color: "#B96A8D", duration: "Varies", price: "From $500" },
-  { id: 5, name: "Orthodontics", desc: "Clear aligners and invisible braces for a straighter smile without disrupting your life.", icon: "🔮", img: "https://images.unsplash.com/photo-1680049113650-4a1c24f61d71?w=600&q=80&auto=format&fit=crop", color: "#3B1E54", duration: "6–18 months", price: "From $3,500" },
-  { id: 6, name: "Teeth Whitening", desc: "Professional-grade whitening for a radiant, luminous smile up to 8 shades brighter.", icon: "⚡", img: "https://images.unsplash.com/photo-1548661211-e559d8c17537?w=600&q=80&auto=format&fit=crop", color: "#D7B98E", duration: "1 session", price: "From $350" },
-  { id: 7, name: "Gum Treatment", desc: "Advanced periodontal care to restore gum health and protect your beautiful smile.", icon: "🌿", img: "https://images.unsplash.com/photo-1609840114035-3c981b782dfe?w=600&q=80&auto=format&fit=crop", color: "#3B1E54", duration: "2–4 sessions", price: "From $400" },
-  { id: 8, name: "Pediatric Dentistry", desc: "Gentle, child-friendly dental care in a warm, reassuring environment for little smiles.", icon: "🌈", img: "https://images.unsplash.com/photo-1650213236604-6dd826c965c0?w=600&q=80&auto=format&fit=crop", color: "#B96A8D", duration: "Per visit", price: "From $120" },
-  { id: 9, name: "Sleep Dentistry", desc: "Comfortable sedation options and snoring solutions for anxiety-free dental experiences.", icon: "🌙", img: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=600&q=80&auto=format&fit=crop", color: "#3B1E54", duration: "1 session", price: "From $600" },
+  { id: 1, name: "Dental Implants", desc: "Permanent, natural-looking tooth replacement with titanium precision and aesthetic excellence.", icon: "🦷", img: "https://images.unsplash.com/photo-1606811841689-23dfddce3e95?w=600&q=80&auto=format&fit=crop", color: "#3B1E54", duration: "1–3 sessions", price: "Pricing available after consultation" },
+  { id: 2, name: "Hollywood Smile", desc: "Complete smile transformation with custom veneers designed to your perfect aesthetic.", icon: "✨", img: "https://images.unsplash.com/photo-1489278353717-f64c6ee8a4d2?w=600&q=80&auto=format&fit=crop", color: "#B96A8D", duration: "2 sessions", price: "Pricing available after consultation" },
+  { id: 3, name: "Porcelain Veneers", desc: "Ultra-thin shells crafted for natural beauty, stain resistance, and long-lasting perfection.", icon: "💎", img: "https://images.unsplash.com/photo-1567516364473-233c4b6fcfbe?w=600&q=80&auto=format&fit=crop", color: "#D7B98E", duration: "2 sessions", price: "Pricing available after consultation" },
+  { id: 4, name: "Cosmetic Dentistry", desc: "Comprehensive aesthetic dental services tailored to elevate your smile's beauty.", icon: "🌸", img: "https://images.unsplash.com/photo-1694858840665-cabf47653213?w=600&q=80&auto=format&fit=crop", color: "#B96A8D", duration: "Varies", price: "Pricing available after consultation" },
+  { id: 5, name: "Orthodontics", desc: "Clear aligners and invisible braces for a straighter smile without disrupting your life.", icon: "🔮", img: "https://images.unsplash.com/photo-1680049113650-4a1c24f61d71?w=600&q=80&auto=format&fit=crop", color: "#3B1E54", duration: "6–18 months", price: "Pricing available after consultation" },
+  { id: 6, name: "Teeth Whitening", desc: "Professional-grade whitening for a radiant, luminous smile up to 8 shades brighter.", icon: "⚡", img: "https://images.unsplash.com/photo-1548661211-e559d8c17537?w=600&q=80&auto=format&fit=crop", color: "#D7B98E", duration: "1 session", price: "Pricing available after consultation" },
+  { id: 7, name: "Gum Treatment", desc: "Advanced periodontal care to restore gum health and protect your beautiful smile.", icon: "🌿", img: "https://images.unsplash.com/photo-1609840114035-3c981b782dfe?w=600&q=80&auto=format&fit=crop", color: "#3B1E54", duration: "2–4 sessions", price: "Pricing available after consultation" },
+  { id: 8, name: "Pediatric Dentistry", desc: "Gentle, child-friendly dental care in a warm, reassuring environment for little smiles.", icon: "🌈", img: "https://images.unsplash.com/photo-1650213236604-6dd826c965c0?w=600&q=80&auto=format&fit=crop", color: "#B96A8D", duration: "Per visit", price: "Pricing available after consultation" },
+  { id: 9, name: "Sleep Dentistry", desc: "Comfortable sedation options and snoring solutions for anxiety-free dental experiences.", icon: "🌙", img: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=600&q=80&auto=format&fit=crop", color: "#3B1E54", duration: "1 session", price: "Pricing available after consultation" },
 ];
 
-export const DOCTORS = [
-  { id: 1, name: "Dr. Sophia Laurent", title: "Lead Cosmetic Dentist & Founder", specialties: ["Hollywood Smile", "Veneers", "Smile Design"], exp: "14 years", img: "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=400&q=90&auto=format&fit=crop&facepad=3", rating: 4.9, reviews: 312 },
-  { id: 2, name: "Dr. James Adebayo", title: "Implant & Oral Surgery Specialist", specialties: ["Implants", "Bone Grafting", "Oral Surgery"], exp: "11 years", img: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=400&q=90&auto=format&fit=crop&facepad=3", rating: 4.8, reviews: 248 },
-  { id: 3, name: "Dr. Mia Chen", title: "Orthodontics & Clear Aligner Expert", specialties: ["Clear Aligners", "Braces", "Retainers"], exp: "9 years", img: "https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=400&q=90&auto=format&fit=crop&facepad=3", rating: 4.9, reviews: 195 },
-  { id: 4, name: "Dr. Lena Kovacs", title: "Pediatric & Family Dentist", specialties: ["Pediatric Care", "Preventive", "Sedation"], exp: "8 years", img: "https://images.unsplash.com/photo-1651008376811-b90baee60c1f?w=400&q=90&auto=format&fit=crop&facepad=3", rating: 5.0, reviews: 278 },
-];
+export const DOCTORS: Array<{
+  id: number;
+  name: string;
+  title: string;
+  specialties: string[];
+  exp: string;
+  img: string;
+  rating: number;
+  reviews: number;
+}> = [];
 
-export const TESTIMONIALS = [
-  { id: 1, name: "Amelia Rodriguez", rating: 5, review: "I was terrified of dentists my whole life. LunaDent completely changed that. Dr. Laurent was so gentle and the results are beyond beautiful. My Hollywood Smile is everything I dreamed of.", treatment: "Hollywood Smile", img: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120&q=80&auto=format&fit=crop&facepad=3", before: "https://images.unsplash.com/photo-1614289371518-722f2615943d?w=300&q=80", after: "https://images.unsplash.com/photo-1489278353717-f64c6ee8a4d2?w=300&q=80" },
-  { id: 2, name: "Priya Nair", rating: 5, review: "The patient portal is incredible — I can track everything, see my invoices, and my rewards points. And the results? My veneers look completely natural. Worth every penny.", treatment: "Porcelain Veneers", img: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=120&q=80&auto=format&fit=crop&facepad=3" },
-  { id: 3, name: "Marcus Thompson", rating: 5, review: "Dr. Adebayo's implant work is world-class. The digital planning process showed me exactly what to expect. 8 months later and my implants feel just like real teeth.", treatment: "Dental Implants", img: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&q=80&auto=format&fit=crop&facepad=3" },
-  { id: 4, name: "Sarah Kim", rating: 5, review: "I came in for clear aligners and stayed for the experience. The booking system, the reminders, the care — everything about LunaDent is premium. My smile journey was genuinely enjoyable.", treatment: "Clear Aligners", img: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&q=80&auto=format&fit=crop&facepad=3" },
-];
+export const TESTIMONIALS: Array<{
+  id: number;
+  name: string;
+  rating: number;
+  review: string;
+  treatment: string;
+  img: string;
+  before?: string;
+  after?: string;
+}> = [];
 
 export const BLOG_POSTS = [
   { id: 1, title: "The Science Behind a Hollywood Smile: What You Need to Know", category: "Cosmetic Dentistry", date: "April 8, 2026", readTime: "5 min", img: "https://images.unsplash.com/photo-1489278353717-f64c6ee8a4d2?w=600&q=80&auto=format&fit=crop", excerpt: "From custom veneer shaping to digital smile design, we break down exactly how we craft smile transformations that look natural and last a lifetime." },
@@ -69,17 +77,17 @@ export const BLOG_POSTS = [
 ];
 
 export const METRICS = [
-  { value: "12,400+", label: "Smiles Transformed" },
-  { value: "4.9★", label: "Average Patient Rating" },
-  { value: "14", label: "Years of Excellence" },
-  { value: "98%", label: "Patient Satisfaction" },
+  { value: "Online", label: "Appointment Requests" },
+  { value: "Private", label: "Patient Portal" },
+  { value: "Digital", label: "Treatment Planning" },
+  { value: "Live", label: "Clinic Operations" },
 ];
 
 export const ACCREDITATIONS = [
-  { name: "ADA Certified", sub: "American Dental Association", icon: "🏅" },
-  { name: "ISO 9001:2015", sub: "Quality Management", icon: "🏆" },
-  { name: "Digital Smile", sub: "Design Certified Studio", icon: "💎" },
-  { name: "Top Rated Clinic", sub: "Healthgrades 2025–2026", icon: "⭐" },
+  { name: "Secure Access", sub: "Role-based patient and staff accounts", icon: "🔐" },
+  { name: "Digital Records", sub: "Structured clinical and treatment records", icon: "🦷" },
+  { name: "Online Booking", sub: "Appointment request workflow", icon: "📅" },
+  { name: "Patient Portal", sub: "Appointments, invoices, payments and documents", icon: "👤" },
 ];
 
 export const JOURNEY_STEPS = [
