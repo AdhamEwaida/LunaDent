@@ -1,27 +1,70 @@
-# 技术栈
+# LunaDent
 
-该项目使用以下技术栈
-- Vite
+LunaDent is a production-oriented dental clinic platform built with React, TypeScript, Vite, Tailwind CSS, Supabase, and Vercel.
+
+## What the project includes
+
+- Public dental clinic website
+- Online appointment requests
+- Staff authentication and role-based access
+- Patient records and medical history
+- Dental chart and clinical notes
+- Treatment plans
+- Appointment management
+- Invoices and payments
+- Inventory tracking
+- Secure patient portal
+- Private patient documents
+- Supabase Row Level Security (RLS)
+- Supabase Edge Functions for clinic user administration
+
+## Stack
+
+- React 18
 - TypeScript
-- React
-- shadcn-ui
+- Vite
 - Tailwind CSS
+- Supabase Auth / PostgreSQL / Storage / Edge Functions
+- Vercel
 
+## Local setup
 
-# 开发流程
+1. Install dependencies:
 
-1. 参考用户需求，调整 src/index.css 与 tailwind.config.ts 的主题风格
-2. 根据用户需求，划分出所需要实现的页面
-3. 整理好每个页面需要实现的功能，在 pages 下创建对应的文件夹及其下入口 Index.tsx
-4. 在 App.tsx 中创建路由配置，引入刚才的各个入口文件 Index.tsx
-5. 根据刚才整理的需求，如果需求简单，可以直接在 Index.tsx 中完成该页面的全部工作
-6. 如果需求复杂，可以将 page 拆分为若干个组件来实现，目录结构如下：
-    - Index.tsx 入口
-    - /components/ 组件
-    - /hooks/ 钩子
-    - /stores/ 如果有复杂交互通信时，可以使用 zustand 进行通信
-7. 在完成需求后，需要进行 pnpm i 安装依赖，并使用 npm run lint & npx tsc --noEmit -p tsconfig.app.json --strict 进行检查，并修复问题
+   `npm ci`
 
-# 接入后端接口
-- 当需要新增接口或者操作 supabase 时，需要先在 src/api 新增对应 api 文件，并导出对应的数据类型，可以参考 src/demo.ts 文件，如果是 supabase 还需要做好实现
-- 前端与 supabase 做实现时，都需要完全按照数据类型进行实现，尽可能避免修改定好的数据类型，如果出现修改，需要检查所有引用该类型的文件
+2. Copy the environment template:
+
+   `cp .env.example .env.local`
+
+3. Configure:
+
+   `VITE_SUPABASE_URL`
+
+   `VITE_SUPABASE_PUBLISHABLE_KEY`
+
+4. Start development:
+
+   `npm run dev`
+
+## Verification
+
+Run before merging production changes:
+
+```bash
+npx tsc --noEmit
+npm run build
+npm audit --omit=dev --audit-level=moderate
+```
+
+## Production
+
+Production is deployed through Vercel from the `main` branch.
+
+Live site: https://lunadent.vercel.app
+
+## Security
+
+The frontend uses only the Supabase publishable key. Server-level secrets must never be committed to the repository or exposed through Vite environment variables.
+
+All exposed application tables should remain protected by Supabase RLS policies.
