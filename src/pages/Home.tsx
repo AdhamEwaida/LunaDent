@@ -44,7 +44,7 @@ function Hero() {
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.1 }}>
               <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold tracking-widest uppercase mb-6"
                 style={{ background: "rgba(255,255,255,0.12)", color: "rgba(255,248,242,0.9)", border: "1px solid rgba(255,255,255,0.2)" }}>
-                <Sparkles size={12} />Beverly Hills Premium Dental Studio
+                <Sparkles size={12} />LunaDent Dental Clinic
               </span>
             </motion.div>
 
@@ -114,13 +114,13 @@ function Hero() {
                     style={{ background: "var(--primary)", color: "white" }}>✨</div>
                   <div>
                     <div className="text-xs font-semibold" style={{ color: "var(--primary)" }}>Quick Booking</div>
-                    <div className="text-xs" style={{ color: "var(--muted-foreground)" }}>Next available: Today 3PM</div>
+                    <div className="text-xs" style={{ color: "var(--muted-foreground)" }}>Choose a preferred date and time</div>
                   </div>
                 </div>
                 <Link to="/booking"
                   className="block text-center py-2.5 rounded-xl text-sm font-semibold"
                   style={{ background: "var(--primary)", color: "white" }}>
-                  Book Free Consultation →
+                  Request Appointment →
                 </Link>
               </motion.div>
 
@@ -642,11 +642,12 @@ function SmartBookingPreview() {
                       <p className="text-sm mb-4" style={{ color: "var(--muted-foreground)" }}>
                         Confirm your appointment via WhatsApp for instant confirmation.
                       </p>
-                      <a href={BRAND.whatsapp} target="_blank" rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 px-5 py-3 rounded-full text-sm font-semibold"
-                        style={{ background: "#25D366", color: "white" }}>
-                        💬 Confirm on WhatsApp
-                      </a>
+                      {BRAND.whatsapp && (
+              <a href={BRAND.whatsapp} target="_blank" rel="noopener noreferrer"
+                className="px-8 py-4 rounded-full font-semibold text-base border border-white/30 text-white hover:bg-white/10 transition-all">
+                💬 Chat on WhatsApp
+              </a>
+            )}
                       <button onClick={() => setStep(1)} className="block mx-auto mt-3 text-xs"
                         style={{ color: "var(--muted-foreground)" }}>Start over</button>
                     </div>
@@ -682,7 +683,7 @@ function SmileAssessmentCTA() {
               <Link to="/smile-assessment"
                 className="px-7 py-3.5 rounded-full font-semibold text-sm transition-all hover:-translate-y-0.5 shadow-lg"
                 style={{ background: "#D7B98E", color: "#2E2A2F" }}>
-                ✨ Start Free Assessment
+                ✨ Start Smile Assessment
               </Link>
               <Link to="/calculator"
                 className="px-7 py-3.5 rounded-full font-semibold text-sm border border-white/30 text-white hover:bg-white/10 transition-all">
@@ -1068,20 +1069,20 @@ function FinalCTA() {
         <FadeIn>
           <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold mb-6 text-white/80 border border-white/20">
             <Star size={11} fill="currentColor" style={{ color: "#D7B98E" }} />
-            Beverly Hills' Most Loved Dental Studio
+            Modern dental care with secure digital access
           </span>
           <h2 className="text-4xl md:text-6xl font-bold text-white mb-6" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
             Your Dream Smile Starts With One Conversation
           </h2>
           <p className="text-lg text-white/75 mb-10 max-w-2xl mx-auto">
-            Book your free consultation today. No commitment. No pressure. Just a genuine conversation about the smile you deserve.
+            Send an appointment request online and continue your care through a secure patient portal.
           </p>
           <div className="flex flex-wrap gap-4 justify-center">
             <Link to="/booking"
               className="px-8 py-4 rounded-full font-semibold text-base transition-all hover:-translate-y-1 shadow-2xl"
               style={{ background: "#D7B98E", color: "#2E2A2F" }}>
               <Calendar className="inline mr-2 mb-0.5" size={16} />
-              Book Free Consultation
+              Request Consultation
             </Link>
             <a href={BRAND.whatsapp} target="_blank" rel="noopener noreferrer"
               className="px-8 py-4 rounded-full font-semibold text-base border border-white/30 text-white hover:bg-white/10 transition-all">
@@ -1089,9 +1090,9 @@ function FinalCTA() {
             </a>
           </div>
           <div className="flex items-center justify-center gap-8 mt-10 text-white/60 text-sm">
-            <span className="flex items-center gap-1.5"><Shield size={13} />No charge for consultation</span>
-            <span className="flex items-center gap-1.5"><Clock size={13} />Same-day appointments available</span>
-            <span className="hidden md:flex items-center gap-1.5"><Globe size={13} />10+ languages spoken</span>
+            <span className="flex items-center gap-1.5"><Shield size={13} />Secure patient access</span>
+            <span className="flex items-center gap-1.5"><Clock size={13} />Appointment requests online</span>
+            <span className="hidden md:flex items-center gap-1.5"><Globe size={13} />Digital clinic workflow</span>
           </div>
         </FadeIn>
       </div>
@@ -1109,16 +1110,7 @@ export default function Home() {
       <WhyChooseUs />
       <FeaturedTreatments />
       <PatientJourney />
-      <BeforeAfter />
-      <SmartBookingPreview />
-      <SmileAssessmentCTA />
-      <DoctorsPreview />
-      <TechnologySection />
-      <Testimonials />
-      <MediaCenter />
       <BlogPreview />
-      <CostCalculatorCTA />
-      <PatientPortalPreview />
       <FinalCTA />
     </>
   );
