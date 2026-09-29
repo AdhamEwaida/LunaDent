@@ -79,53 +79,25 @@ export function Doctors() {
     <div className="min-h-screen pb-24" style={{ background: "var(--background)" }}>
       <section className="py-20" style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>
         <div className="max-w-4xl mx-auto px-4 text-center">
-          <span className="text-xs font-semibold tracking-widest uppercase text-white/60 mb-3 block">Our Specialists</span>
+          <span className="text-xs font-semibold tracking-widest uppercase text-white/60 mb-3 block">Clinical Team</span>
           <h1 className="text-4xl md:text-6xl font-bold text-white mb-4" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
-            Meet Your Dental Team
+            LunaDent Dental Team
           </h1>
           <p className="text-base text-white/75 max-w-xl mx-auto">
-            Board-certified specialists passionate about creating beautiful, healthy smiles.
+            Verified clinician profiles will appear here after they are configured by the clinic administrator.
           </p>
         </div>
       </section>
-      <div className="max-w-7xl mx-auto px-4 py-16">
-        <StaggerGroup className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {DOCTORS.map((d, i) => (
-            <StaggerItem key={d.id}>
-              <HoverCard className="h-full">
-                <div className="rounded-3xl overflow-hidden border flex flex-col md:flex-row h-full"
-                  style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-                  <div className="relative w-full md:w-48 h-56 md:h-auto overflow-hidden flex-shrink-0">
-                    <img src={d.img} alt={d.name} className="w-full h-full object-cover" />
-                    <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(59,30,84,0.5), transparent 40%)" }} />
-                    <div className="absolute bottom-3 left-3 flex items-center gap-1">
-                      {[1,2,3,4,5].map(i => <Star key={i} size={10} fill="#D7B98E" color="#D7B98E" />)}
-                      <span className="text-white text-xs ml-1">{d.rating}</span>
-                    </div>
-                  </div>
-                  <div className="p-6 flex flex-col">
-                    <h3 className="text-xl font-bold mb-1" style={{ fontFamily: "'Cormorant Garamond', serif", color: "var(--primary)" }}>{d.name}</h3>
-                    <p className="text-sm mb-3" style={{ color: "var(--accent)" }}>{d.title}</p>
-                    <div className="flex flex-wrap gap-1.5 mb-4">
-                      {d.specialties.map(s => (
-                        <span key={s} className="px-2.5 py-1 rounded-full text-xs"
-                          style={{ background: "var(--secondary)", color: "var(--primary)" }}>{s}</span>
-                      ))}
-                    </div>
-                    <p className="text-sm mb-4 flex-1" style={{ color: "var(--muted-foreground)" }}>
-                      {d.exp} of clinical excellence · {d.reviews} verified patient reviews. Dedicated to delivering exceptional results with a gentle, personalized approach.
-                    </p>
-                    <Link to="/booking"
-                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold self-start"
-                      style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}>
-                      <Calendar size={13} />Book with {d.name.split(" ")[1]}
-                    </Link>
-                  </div>
-                </div>
-              </HoverCard>
-            </StaggerItem>
-          ))}
-        </StaggerGroup>
+      <div className="max-w-3xl mx-auto px-4 py-16 text-center">
+        <div className="rounded-3xl border p-10" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+          <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
+            No public clinician profiles have been published yet.
+          </p>
+          <Link to="/booking" className="inline-flex items-center gap-2 mt-6 px-6 py-3 rounded-full text-sm font-semibold"
+            style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}>
+            <Calendar size={14} />Request an Appointment
+          </Link>
+        </div>
       </div>
     </div>
   );
@@ -133,69 +105,23 @@ export function Doctors() {
 
 // ===== BEFORE & AFTER PAGE =====
 export function BeforeAfterPage() {
-  const cases = Array.from({length: 6}, (_, i) => ({
-    name: ["Amelia R.","Sofia K.","Priya N.","Marcus T.","Emma W.","Sarah L."][i],
-    treatment: ["Hollywood Smile","Veneers","Implants","Whitening","Aligners","Smile Design"][i],
-    doctor: DOCTORS[i % 4].name,
-    before: IMAGES.smile4,
-    after: IMAGES.hero1,
-    rating: 5,
-  }));
-
   return (
     <div className="min-h-screen pb-24" style={{ background: "var(--background)" }}>
       <section className="py-20" style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>
         <div className="max-w-4xl mx-auto px-4 text-center">
-          <span className="text-xs font-semibold tracking-widest uppercase text-white/60 mb-3 block">Transformations</span>
+          <span className="text-xs font-semibold tracking-widest uppercase text-white/60 mb-3 block">Treatment Gallery</span>
           <h1 className="text-4xl md:text-6xl font-bold text-white mb-4" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
-            Before & After Gallery
+            Before & After
           </h1>
           <p className="text-base text-white/75 max-w-xl mx-auto">
-            Real patients. Real results. No filters. Swipe to compare.
+            Patient cases will only be published with appropriate clinic review and patient consent.
           </p>
         </div>
       </section>
-      <div className="max-w-7xl mx-auto px-4 py-16">
-        <StaggerGroup className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {cases.map((c, i) => (
-            <StaggerItem key={i}>
-              <HoverCard>
-                <div className="rounded-2xl border overflow-hidden" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-                  <div className="flex">
-                    <div className="w-1/2 relative overflow-hidden h-52">
-                      <img src={c.before} alt="Before" className="w-full h-full object-cover grayscale" />
-                      <div className="absolute inset-0 flex items-end p-2">
-                        <span className="px-2 py-0.5 rounded text-xs bg-black/60 text-white">Before</span>
-                      </div>
-                    </div>
-                    <div className="w-1/2 relative overflow-hidden h-52">
-                      <img src={c.after} alt="After" className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 flex items-end justify-end p-2">
-                        <span className="px-2 py-0.5 rounded text-xs font-semibold" style={{ background: "var(--accent)", color: "white" }}>After ✨</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="p-4">
-                    <div className="font-semibold text-sm mb-0.5" style={{ color: "var(--foreground)" }}>{c.name}</div>
-                    <div className="text-xs" style={{ color: "var(--accent)" }}>{c.treatment}</div>
-                    <div className="flex items-center justify-between mt-2">
-                      <div className="flex gap-0.5">
-                        {[1,2,3,4,5].map(s => <Star key={s} size={9} fill="#D7B98E" color="#D7B98E" />)}
-                      </div>
-                      <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>{c.doctor}</span>
-                    </div>
-                  </div>
-                </div>
-              </HoverCard>
-            </StaggerItem>
-          ))}
-        </StaggerGroup>
-        <FadeIn className="text-center mt-12">
-          <Link to="/booking" className="inline-flex items-center gap-2 px-8 py-4 rounded-full font-semibold shadow-lg hover:-translate-y-0.5 transition-all"
-            style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}>
-            <Sparkles size={15} />Start Your Transformation
-          </Link>
-        </FadeIn>
+      <div className="max-w-3xl mx-auto px-4 py-16 text-center">
+        <div className="rounded-3xl border p-10" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+          <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>No public cases have been published yet.</p>
+        </div>
       </div>
     </div>
   );
@@ -459,59 +385,24 @@ export function Contact() {
       <section className="py-20" style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>
         <div className="max-w-4xl mx-auto px-4 text-center">
           <h1 className="text-4xl md:text-5xl font-bold text-white mb-4" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
-            Get in Touch
+            Contact LunaDent
           </h1>
-          <p className="text-base text-white/75">We'd love to hear from you. Book a consultation or send us a message.</p>
+          <p className="text-base text-white/75">Request an appointment online and the clinic team can follow up with you.</p>
         </div>
       </section>
 
-      <div className="max-w-5xl mx-auto px-4 py-16">
-        <div className="grid lg:grid-cols-2 gap-10">
-          <FadeIn>
-            <div className="rounded-3xl border p-7" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-              <h2 className="text-2xl font-bold mb-6" style={{ fontFamily: "'Cormorant Garamond', serif", color: "var(--primary)" }}>
-                Send a Message
-              </h2>
-              <div className="space-y-4">
-                {[["Name","Your full name"],["Email","your@email.com"],["Phone","+1 (xxx) xxx-xxxx"]].map(([l,p]) => (
-                  <div key={l}>
-                    <label className="text-xs font-medium mb-1.5 block" style={{ color: "var(--muted-foreground)" }}>{l}</label>
-                    <input placeholder={p} className="w-full px-4 py-3 rounded-xl border text-sm outline-none"
-                      style={{ background: "var(--input)", borderColor: "var(--border)", color: "var(--foreground)" }} />
-                  </div>
-                ))}
-                <div>
-                  <label className="text-xs font-medium mb-1.5 block" style={{ color: "var(--muted-foreground)" }}>Message</label>
-                  <textarea rows={4} placeholder="Tell us about your smile goals..."
-                    className="w-full px-4 py-3 rounded-xl border text-sm outline-none resize-none"
-                    style={{ background: "var(--input)", borderColor: "var(--border)", color: "var(--foreground)" }} />
-                </div>
-                <button className="w-full py-3.5 rounded-full text-sm font-semibold"
-                  style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}>
-                  Send Message
-                </button>
-              </div>
-            </div>
-          </FadeIn>
-
-          <div className="space-y-5">
-            <FadeIn direction="left">
-              <div className="rounded-2xl overflow-hidden h-52">
-                <img src={IMAGES.clinic1} alt="Clinic" className="w-full h-full object-cover" />
-              </div>
-            </FadeIn>
-            <FadeIn direction="left" delay={0.1}>
-              <div className="rounded-2xl border p-5" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-                <h3 className="font-semibold mb-4" style={{ color: "var(--foreground)" }}>Visit the Studio</h3>
-                {[["📍","88 Crescent Avenue, Suite 400, Beverly Hills, CA 90210"],["📞","+1 (800) 586-2636"],["✉️","hello@lunadent.studio"],["🕐","Mon–Fri: 9AM–7PM · Sat: 9AM–4PM"]].map(([icon, val]) => (
-                  <div key={val} className="flex items-start gap-3 py-2">
-                    <span>{icon}</span>
-                    <span className="text-sm" style={{ color: "var(--foreground)" }}>{val}</span>
-                  </div>
-                ))}
-              </div>
-            </FadeIn>
-          </div>
+      <div className="max-w-3xl mx-auto px-4 py-16">
+        <div className="rounded-3xl border p-8 text-center" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+          <h2 className="text-2xl font-bold mb-3" style={{ fontFamily: "'Cormorant Garamond', serif", color: "var(--primary)" }}>
+            Appointment Requests
+          </h2>
+          <p className="text-sm mb-6" style={{ color: "var(--muted-foreground)" }}>
+            Clinic address, phone, email and opening hours will appear here once the clinic administrator publishes verified contact details.
+          </p>
+          <Link to="/booking" className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full text-sm font-semibold"
+            style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}>
+            <Calendar size={14} />Request an Appointment
+          </Link>
         </div>
       </div>
     </div>
