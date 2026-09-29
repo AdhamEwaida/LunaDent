@@ -4,11 +4,8 @@ import ProtectedRoute from "@/auth/ProtectedRoute";
 import StaffLogin from "@/pages/staff/Login";
 import Layout from "@/components/Layout";
 import Home from "@/pages/Home";
-import PatientPortal from "@/pages/PatientPortal";
 import PatientPortalLive from "@/pages/PatientPortalLive";
-import { isSupabaseConfigured } from "@/lib/supabase";
 import AdminDashboardPage from "@/pages/AdminDashboard";
-import Accounting from "@/pages/Accounting";
 import AccountingLive from "@/pages/AccountingLive";
 import Booking from "@/pages/Booking";
 import { Blog, BlogDetail } from "@/pages/Blog";
@@ -41,8 +38,8 @@ export default function App() {
       <AdminDashboardPage />
     </ProtectedRoute>
   );
-  const patientPortalElement = isSupabaseConfigured ? <PatientPortalLive /> : <PatientPortal />;
-  const accountingPage = isSupabaseConfigured ? <AccountingLive /> : <Accounting />;
+  const patientPortalElement = <PatientPortalLive />;
+  const accountingPage = <AccountingLive />;
   const accountingElement = (
     <ProtectedRoute roles={["admin", "receptionist", "accountant"]}>
       {accountingPage}
