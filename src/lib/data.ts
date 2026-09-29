@@ -91,19 +91,17 @@ export const ACCREDITATIONS = [
 ];
 
 export const JOURNEY_STEPS = [
-  { step: 1, title: "Free Consultation", desc: "Meet your dedicated dental care specialist. Discuss your goals, concerns, and smile vision." },
-  { step: 2, title: "Digital Smile Assessment", desc: "AI-powered 3D scanning and digital smile simulation shows your results before treatment begins." },
-  { step: 3, title: "Personalized Treatment Plan", desc: "Receive a clear, transparent plan with timeline, costs, and payment options — all in one view." },
-  { step: 4, title: "Treatment Sessions", desc: "Expert care in a luxurious, comfortable studio environment with leading dental technology." },
-  { step: 5, title: "Long-Term Follow-Up", desc: "Your smile journey doesn't end at treatment. Ongoing support, monitoring, and rewards await you." },
+  { step: 1, title: "Consultation Request", desc: "Share your goals and request a consultation with the clinic team." },
+  { step: 2, title: "Digital Smile Assessment", desc: "Digital assessment tools can support treatment planning when clinically appropriate." },
+  { step: 3, title: "Personalized Treatment Plan", desc: "Review your treatment plan, timeline, and estimated costs with the clinic team." },
+  { step: 4, title: "Treatment Sessions", desc: "Receive care according to the treatment plan agreed with your dental team." },
+  { step: 5, title: "Long-Term Follow-Up", desc: "Continue follow-up care, appointments, documents, and billing through the clinic workflow." },
 ];
 
 export const NAV_LINKS = [
   { label: "Home", path: "/" },
   { label: "Treatments", path: "/treatments" },
-  { label: "Doctors", path: "/doctors" },
-  { label: "Patient Journey", path: "/journey" },
-  { label: "Before & After", path: "/before-after" },
-  { label: "Blog", path: "/blog" },
+    { label: "Patient Journey", path: "/journey" },
+    { label: "Blog", path: "/blog" },
   { label: "Contact", path: "/contact" },
 ];
