@@ -1,0 +1,209 @@
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Cairo:wght@400;500;600;700&family=DM+Sans:wght@400;500;600&display=swap");
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+==========================================================================
+【AI HANDOVER NOTE】
+1. DESIGN PHILOSOPHY:
+   - Soft-Luxury Medical Aesthetic: This design merges premium cosmetic dental elegance with medical credibility through a refined feminine-friendly palette that avoids childish pink while maintaining warmth and sophistication.
+   - Editorial Asymmetry: Breaking away from traditional grid-locked medical templates, we employ magazine-style layouts with curved sections, floating cards, and staggered compositions that feel artistic yet professional.
+   - Physicality with Champagne Accents: Subtle rim-lighting effects, ambient shadows, and champagne gold borders create depth and premium tactility, elevating the platform beyond flat corporate designs.
+   - Why this approach: High-end dental studios require trust + beauty. The Deep Plum (#3B1E54) anchors authority, Rose Mauve (#B96A8D) adds approachability, and Warm Ivory (#FFF8F2) creates a spa-like calm—perfect for cosmetic dentistry where patient comfort is paramount.
+
+2. TYPOGRAPHY:
+   - Cormorant Garamond (Display): Chosen for its editorial elegance and refined serifs, perfect for hero headlines and section titles. Creates a luxury magazine feel while remaining highly readable.
+   - Cairo (Body/UI): Selected for its warm geometric structure and future Arabic support. Its rounded terminals soften the medical context while maintaining professional clarity across dashboards and forms.
+   - DM Sans (Alt UI): Used for data-heavy components (invoices, tables, forms) where geometric precision aids scannability.
+
+3. COLOR SYSTEM:
+   - Brand Core: Deep Plum (H: 280°) represents medical authority with a luxurious twist—neither cold clinical blue nor overly feminine pink. It maps to --primary for CTAs and --sidebar for admin navigation.
+   - Accent Hierarchy: Rose Mauve (H: 340°) serves as --accent for interactive elements and hover states, creating warmth without sacrificing professionalism. Champagne Gold (H: 40°) is reserved for badges, borders, and premium highlights via --ring.
+   - Semantic Colors: Success uses a muted sage (H: 150°) to avoid harsh medical greens; Warning employs a soft amber (H: 35°) that complements the warm palette; Destructive stays in coral-red territory (H: 10°) but with reduced saturation for elegance.
+   - Neutrals: Charcoal Text (#2E2A2F) provides strong contrast on Warm Ivory backgrounds, while Muted Text (#746B75) handles secondary information without visual noise.
+
+4. USAGE GUIDE:
+   - Layout Type: Full-width editorial sections with centered 1280px content containers. Use curved clip-paths (border-radius: 2rem on sections) and floating cards with backdrop-blur for glassmorphism effects.
+   - Special Effects: Apply subtle rim-light via box-shadow: 0 -1px 0 0 oklch(0.85 0.05 40) inset on card tops. Use gradient overlays (linear-gradient(135deg, oklch(0.97 0.02 340 / 0.6), oklch(0.95 0.03 280 / 0.4))) on hero sections.
+   - Dashboard Design: Admin CRM uses --sidebar (Deep Plum) with --sidebar-accent (Rose Mauve) for active states. Patient Portal employs lighter --card backgrounds with --muted borders for a softer feel.
+   - Mobile-First: Sticky booking CTA uses --primary with --primary-foreground. Floating WhatsApp button uses --accent. Ensure touch targets ≥44px and readable type scales (16px base minimum).
+   - Animation: Smooth scroll reveals (opacity + translateY), hover lifts (translateY: -4px + shadow expansion), and micro-interactions on booking steps. Keep transitions under 300ms for responsiveness.
+   - Accessibility: All text meets WCAG AA on Warm Ivory backgrounds. Use --muted-foreground for labels, --foreground for body text, and ensure form inputs have visible --border states.
+==========================================================================
+*/
+
+:root {
+  /* Typography */
+  --font-sans: 'Cairo', 'DM Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'DM Mono', 'Courier New', monospace;
+  
+  /* Radius */
+  --radius: 0.75rem;
+
+  /* Core UI Tokens */
+  --background: oklch(0.98 0.01 40);
+  --foreground: oklch(0.20 0.02 280);
+  --card: oklch(0.97 0.015 340);
+  --card-foreground: oklch(0.22 0.02 280);
+  --popover: oklch(0.99 0.005 40);
+  --popover-foreground: oklch(0.20 0.02 280);
+  --primary: oklch(0.35 0.12 280);
+  --primary-foreground: oklch(0.98 0.01 340);
+  --secondary: oklch(0.92 0.03 340);
+  --secondary-foreground: oklch(0.25 0.02 280);
+  --muted: oklch(0.95 0.02 340);
+  --muted-foreground: oklch(0.50 0.03 280);
+  --accent: oklch(0.62 0.14 340);
+  --accent-foreground: oklch(0.98 0.01 340);
+  --destructive: oklch(0.58 0.18 10);
+  --destructive-foreground: oklch(0.98 0.01 340);
+  --border: oklch(0.88 0.02 340);
+  --input: oklch(0.90 0.02 340);
+  --ring: oklch(0.68 0.08 40);
+  
+  /* Chart Tokens */
+  --chart-1: oklch(0.62 0.14 340);
+  --chart-2: oklch(0.68 0.08 40);
+  --chart-3: oklch(0.35 0.12 280);
+  --chart-4: oklch(0.75 0.10 150);
+  --chart-5: oklch(0.65 0.12 200);
+  
+  /* Sidebar Tokens */
+  --sidebar: oklch(0.35 0.12 280);
+  --sidebar-foreground: oklch(0.95 0.02 340);
+  --sidebar-primary: oklch(0.62 0.14 340);
+  --sidebar-primary-foreground: oklch(0.98 0.01 340);
+  --sidebar-accent: oklch(0.62 0.14 340);
+  --sidebar-accent-foreground: oklch(0.98 0.01 340);
+  --sidebar-border: oklch(0.45 0.10 280);
+  --sidebar-ring: oklch(0.68 0.08 40);
+}
+
+.dark {
+  --background: oklch(0.15 0.02 280);
+  --foreground: oklch(0.92 0.02 340);
+  --card: oklch(0.18 0.03 280);
+  --card-foreground: oklch(0.90 0.02 340);
+  --popover: oklch(0.16 0.02 280);
+  --popover-foreground: oklch(0.92 0.02 340);
+  --primary: oklch(0.62 0.14 340);
+  --primary-foreground: oklch(0.15 0.02 280);
+  --secondary: oklch(0.28 0.05 280);
+  --secondary-foreground: oklch(0.90 0.02 340);
+  --muted: oklch(0.25 0.03 280);
+  --muted-foreground: oklch(0.60 0.04 340);
+  --accent: oklch(0.68 0.16 340);
+  --accent-foreground: oklch(0.15 0.02 280);
+  --destructive: oklch(0.62 0.20 10);
+  --destructive-foreground: oklch(0.95 0.02 340);
+  --border: oklch(0.30 0.04 280);
+  --input: oklch(0.28 0.04 280);
+  --ring: oklch(0.72 0.10 40);
+  
+  /* Chart Tokens */
+  --chart-1: oklch(0.68 0.16 340);
+  --chart-2: oklch(0.72 0.10 40);
+  --chart-3: oklch(0.55 0.14 280);
+  --chart-4: oklch(0.70 0.12 150);
+  --chart-5: oklch(0.65 0.14 200);
+  
+  /* Sidebar Tokens */
+  --sidebar: oklch(0.12 0.03 280);
+  --sidebar-foreground: oklch(0.88 0.03 340);
+  --sidebar-primary: oklch(0.68 0.16 340);
+  --sidebar-primary-foreground: oklch(0.12 0.03 280);
+  --sidebar-accent: oklch(0.68 0.16 340);
+  --sidebar-accent-foreground: oklch(0.12 0.03 280);
+  --sidebar-border: oklch(0.22 0.04 280);
+  --sidebar-ring: oklch(0.72 0.10 40);
+}
+
+@theme inline {
+  /* Shadcn Core Mapping */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Charts Mapping */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Sidebar Mapping */
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Typography */
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  /* Radius */
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    @apply scroll-smooth antialiased;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans min-h-screen;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+  }
+
+  code, pre {
+    @apply font-mono;
+  }
+
+  ::selection {
+    @apply bg-primary/20 text-primary;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/20 rounded-full hover:bg-muted-foreground/40;
+  }
+}
