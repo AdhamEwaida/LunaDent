@@ -32,17 +32,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--background)" }}>
-      {/* Top Banner */}
+      {/* Production status banner */}
       <div className="hidden md:flex items-center justify-between px-6 py-2 text-xs"
         style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}>
-        <span className="flex items-center gap-2 opacity-90">
-          <Star size={10} fill="currentColor" />
-          <span>4.9 Rating · 12,400+ Smiles Transformed · Beverly Hills, CA</span>
-        </span>
-        <a href={`tel:${BRAND.phone}`} className="flex items-center gap-1.5 font-medium hover:opacity-80 transition-opacity">
-          <Phone size={11} />
-          {BRAND.phone}
-        </a>
+        <span className="opacity-90">LunaDent Dental Clinic</span>
+        <span className="opacity-75">Online booking · Secure patient portal</span>
       </div>
 
       {/* Main Nav */}
@@ -66,7 +60,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <span className="font-bold text-lg tracking-tight" style={{ fontFamily: "'Cormorant Garamond', serif", color: "var(--primary)" }}>
                   LunaDent
                 </span>
-                <span className="text-xs ml-1 opacity-60" style={{ color: "var(--muted-foreground)" }}>Studio</span>
+                <span className="text-xs ml-1 opacity-60" style={{ color: "var(--muted-foreground)" }}>Dental Clinic</span>
               </div>
             </Link>
 
@@ -177,11 +171,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <Footer />
 
       {/* Floating WhatsApp */}
-      <a href={BRAND.whatsapp} target="_blank" rel="noopener noreferrer"
-        className="fixed bottom-24 right-5 z-50 w-14 h-14 rounded-full flex items-center justify-center shadow-xl text-2xl transition-all hover:scale-110 active:scale-95"
-        style={{ background: "#25D366", color: "white" }}>
-        💬
-      </a>
+      {BRAND.whatsapp && (
+        <a href={BRAND.whatsapp} target="_blank" rel="noopener noreferrer"
+          className="fixed bottom-24 right-5 z-50 w-14 h-14 rounded-full flex items-center justify-center shadow-xl text-2xl transition-all hover:scale-110 active:scale-95"
+          style={{ background: "#25D366", color: "white" }}>
+          💬
+        </a>
+      )}
 
       {/* Sticky Mobile Book CTA */}
       <div className="lg:hidden fixed bottom-5 left-4 right-4 z-40">
@@ -193,8 +189,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </Link>
       </div>
 
-      {/* AI Chat Widget */}
-      <AIChat />
     </div>
   );
 }
@@ -209,16 +203,19 @@ function Footer() {
             <div className="flex items-center gap-2 mb-4">
               <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
                 style={{ background: "rgba(255,255,255,0.15)" }}>L</div>
-              <span className="text-xl font-bold" style={{ fontFamily: "'Cormorant Garamond', serif" }}>LunaDent Studio</span>
+              <span className="text-xl font-bold" style={{ fontFamily: "'Cormorant Garamond', serif" }}>LunaDent Dental Clinic</span>
             </div>
             <p className="text-sm leading-relaxed opacity-70 mb-6 max-w-xs">
-              A premium dental studio designed around your comfort, confidence, and the most beautiful version of your smile.
+              Modern dental care supported by digital treatment planning, online booking, and secure patient access.
             </p>
             <div className="space-y-1.5 text-sm opacity-75">
-              <div>📍 88 Crescent Ave, Suite 400, Beverly Hills, CA</div>
-              <div>📞 +1 (800) 586-2636</div>
-              <div>✉️ hello@lunadent.studio</div>
-              <div>🕐 Mon–Fri: 9AM–7PM · Sat: 9AM–4PM</div>
+              {BRAND.address && <div>📍 {BRAND.address}</div>}
+              {BRAND.phone && <div>📞 {BRAND.phone}</div>}
+              {BRAND.email && <div>✉️ {BRAND.email}</div>}
+              {BRAND.hours && <div>🕐 {BRAND.hours}</div>}
+              {!BRAND.address && !BRAND.phone && !BRAND.email && !BRAND.hours && (
+                <div>Clinic contact details are managed by the clinic administrator.</div>
+              )}
             </div>
           </div>
 
@@ -240,7 +237,7 @@ function Footer() {
 
           {/* Studio */}
           <div>
-            <h4 className="font-semibold mb-4 text-sm tracking-widest uppercase opacity-60">Studio</h4>
+            <h4 className="font-semibold mb-4 text-sm tracking-widest uppercase opacity-60">Clinic</h4>
             {[["Our Doctors","/doctors"],["Technology","/technology"],["Media Center","/media"],["Accreditations","/#accreditations"],["Careers","/#careers"],["Contact","/contact"]].map(([l,p]) => (
               <Link key={p} to={p} className="block text-sm py-1 opacity-70 hover:opacity-100 transition-opacity">{l}</Link>
             ))}
@@ -249,7 +246,7 @@ function Footer() {
 
         {/* Bottom Bar */}
         <div className="pt-6 flex flex-col md:flex-row items-center justify-between gap-4 text-xs opacity-50">
-          <span>© 2026 LunaDent Studio. All rights reserved.</span>
+          <span>© 2026 LunaDent Dental Clinic. All rights reserved.</span>
           <div className="flex gap-4">
             <Link to="/privacy" className="hover:opacity-80">Privacy Policy</Link>
             <Link to="/terms" className="hover:opacity-80">Terms of Service</Link>
@@ -258,87 +255,5 @@ function Footer() {
         </div>
       </div>
     </footer>
-  );
-}
-
-function AIChat() {
-  const [open, setOpen] = useState(false);
-  const [msg, setMsg] = useState("");
-  const [messages, setMessages] = useState([
-    { from: "bot", text: "Hello! I'm Luna, your AI dental assistant. 👋 How can I help you today?" },
-  ]);
-
-  const send = () => {
-    if (!msg.trim()) return;
-    const userMsg = msg.trim();
-    setMessages(prev => [...prev, { from: "user", text: userMsg }]);
-    setMsg("");
-    setTimeout(() => {
-      setMessages(prev => [...prev, {
-        from: "bot",
-        text: "Thank you for reaching out! I recommend booking a free consultation with one of our specialists. Would you like me to help you schedule one? 😊",
-      }]);
-    }, 1200);
-  };
-
-  return (
-    <div className="fixed bottom-24 left-5 z-40 flex flex-col items-start gap-2">
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, y: 16, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 16, scale: 0.95 }}
-            className="w-80 rounded-2xl shadow-2xl overflow-hidden"
-            style={{ background: "var(--card)", border: "1px solid var(--border)" }}
-          >
-            <div className="px-4 py-3 flex items-center gap-3"
-              style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>
-              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-sm">🤖</div>
-              <div>
-                <div className="text-sm font-semibold text-white">Luna AI Assistant</div>
-                <div className="text-xs text-white/70">Always here to help</div>
-              </div>
-              <button onClick={() => setOpen(false)} className="ml-auto text-white/70 hover:text-white">
-                <X size={16} />
-              </button>
-            </div>
-            <div className="p-3 h-52 overflow-y-auto space-y-2">
-              {messages.map((m, i) => (
-                <div key={i} className={`flex ${m.from === "user" ? "justify-end" : "justify-start"}`}>
-                  <div className="max-w-[85%] px-3 py-2 rounded-xl text-sm"
-                    style={{
-                      background: m.from === "user" ? "var(--primary)" : "var(--muted)",
-                      color: m.from === "user" ? "var(--primary-foreground)" : "var(--foreground)",
-                    }}>
-                    {m.text}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="p-2 text-xs text-center opacity-50 border-t" style={{ borderColor: "var(--border)" }}>
-              AI guidance does not replace professional dental diagnosis.
-            </div>
-            <div className="p-3 flex gap-2 border-t" style={{ borderColor: "var(--border)" }}>
-              <input value={msg} onChange={e => setMsg(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && send()}
-                placeholder="Ask Luna anything..."
-                className="flex-1 px-3 py-2 rounded-xl text-sm border outline-none"
-                style={{ background: "var(--input)", borderColor: "var(--border)", color: "var(--foreground)" }} />
-              <button onClick={send}
-                className="px-3 py-2 rounded-xl text-sm font-medium"
-                style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}>
-                Send
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-      <button onClick={() => setOpen(!open)}
-        className="w-12 h-12 rounded-full flex items-center justify-center shadow-lg text-xl transition-all hover:scale-110"
-        style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>
-        {open ? "✕" : "💬"}
-      </button>
-    </div>
   );
 }
