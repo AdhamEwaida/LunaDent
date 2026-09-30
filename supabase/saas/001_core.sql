@@ -348,6 +348,47 @@ create index if not exists patients_auth_user_idx on public.patients(auth_user_i
 create index if not exists clinic_site_settings_theme_idx on public.clinic_site_settings(theme_key);
 create index if not exists subscriptions_plan_idx on public.subscriptions(plan_id) where plan_id is not null;
 
+-- Authorization helpers live in the private schema. They are SECURITY DEFINER only
+-- to perform protected membership/profile lookups and always bind access to auth.uid().
+create or replace function private.is_platform_super_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path=''
+as $
+  select exists (
+    select 1 from public.profiles p
+    where p.id=auth.uid()
+      and p.active=true
+      and p.platform_role='super_admin'::public.platform_role
+  );
+$;
+
+create or replace function private.has_clinic_role(
+  p_clinic_id uuid,
+  p_roles public.clinic_role[] default null
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path=''
+as $
+  select auth.uid() is not null and exists (
+    select 1 from public.clinic_memberships m
+    where m.clinic_id=p_clinic_id
+      and m.user_id=auth.uid()
+      and m.active=true
+      and (p_roles is null or m.role=any(p_roles))
+  );
+$;
+
+revoke all on function private.is_platform_super_admin() from public,anon;
+revoke all on function private.has_clinic_role(uuid,public.clinic_role[]) from public,anon;
+grant execute on function private.is_platform_super_admin() to authenticated;
+grant execute on function private.has_clinic_role(uuid,public.clinic_role[]) to authenticated;
+
 -- One platform owner.
 create unique index if not exists profiles_single_platform_super_admin_idx
   on public.profiles(platform_role)
