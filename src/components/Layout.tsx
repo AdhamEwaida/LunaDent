@@ -3,18 +3,34 @@ import { Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, ChevronDown, Phone, Star, Sparkles } from "lucide-react";
 import { NAV_LINKS, BRAND } from "@/lib/data";
-
-const PORTAL_LINKS = [
-  { label: "Patient Portal", path: "/patient-portal", icon: "👤" },
-  { label: "Admin Dashboard", path: "/admin", icon: "⚙️" },
-  { label: "Accounting", path: "/accounting", icon: "💼" },
-];
+import { useAuth } from "@/auth/AuthContext";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [portalOpen, setPortalOpen] = useState(false);
   const location = useLocation();
+  const { role } = useAuth();
+
+  const portalLinks = role === "admin"
+    ? [
+        { label: "Patient Sign In", path: "/patient-portal/login", icon: "👤" },
+        { label: "Admin Dashboard", path: "/admin", icon: "⚙️" },
+      ]
+    : role && role !== "patient"
+      ? [
+          { label: "Patient Sign In", path: "/patient-portal/login", icon: "👤" },
+          { label: "Staff Workspace", path: "/admin", icon: "🩺" },
+        ]
+      : role === "patient"
+        ? [
+            { label: "Patient Portal", path: "/patient-portal", icon: "👤" },
+            { label: "Staff Sign In", path: "/staff/login", icon: "🩺" },
+          ]
+        : [
+            { label: "Patient Sign In", path: "/patient-portal/login", icon: "👤" },
+            { label: "Staff Sign In", path: "/staff/login", icon: "🩺" },
+          ];
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 40);
@@ -96,7 +112,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       className="absolute top-full right-0 w-48 rounded-xl p-2 shadow-xl border"
                       style={{ background: "var(--card)", borderColor: "var(--border)" }}
                     >
-                      {PORTAL_LINKS.map(p => (
+                      {portalLinks.map(p => (
                         <Link key={p.path} to={p.path}
                           className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm hover:opacity-80 transition-all"
                           style={{ color: "var(--foreground)" }}>
@@ -146,7 +162,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   </Link>
                 ))}
                 <div className="pt-2 border-t mt-2" style={{ borderColor: "var(--border)" }}>
-                  {PORTAL_LINKS.map(p => (
+                  {portalLinks.map(p => (
                     <Link key={p.path} to={p.path}
                       className="flex items-center gap-2 px-3 py-3 rounded-xl text-sm transition-all"
                       style={{ color: "var(--muted-foreground)" }}>
