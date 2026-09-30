@@ -4,13 +4,18 @@ import { LockKeyhole, Mail, ShieldCheck, Stethoscope } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 
 export default function StaffLogin() {
-  const { user, role, mustChangePassword, signIn, signOut } = useAuth();
+  const { user, role, isSuperAdmin, mustChangePassword, signIn, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  if (user && isSuperAdmin) {
+    if (mustChangePassword) return <Navigate to="/staff/change-password" replace />;
+    return <Navigate to="/super-admin" replace />;
+  }
 
   if (user && role && role !== "patient") {
     if (mustChangePassword) return <Navigate to="/staff/change-password" replace />;
