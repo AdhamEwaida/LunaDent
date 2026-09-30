@@ -404,7 +404,7 @@ export function ClinicServices() {
 
 export function ClinicUsers() {
   type ManageableStaffRole = "dentist" | "receptionist" | "accountant";
-  type StaffRole = "admin" | ManageableStaffRole;
+  type StaffRole = "clinic_owner" | ManageableStaffRole;
   type StaffUser = {
     id: string;
     email?: string;
@@ -416,6 +416,7 @@ export function ClinicUsers() {
     must_change_password?: boolean;
   };
 
+  const { activeClinicId, activeClinicRole } = useAuth();
   const [items, setItems] = useState<StaffUser[]>([]);
   const [show, setShow] = useState(false);
   const [error, setError] = useState("");
@@ -430,6 +431,8 @@ export function ClinicUsers() {
   });
 
   const load = async () => {
+    if (!activeClinicId) return;
+    setError("");
     try {
       setItems((await clinicRepository.listClinicUsers()) as StaffUser[]);
     } catch (err) {
@@ -437,7 +440,10 @@ export function ClinicUsers() {
     }
   };
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [activeClinicId]);
+
+  if (!activeClinicId) return <EmptyState icon={UserRound} title="No clinic selected" description="Select a clinic before managing staff." />;
+  if (activeClinicRole !== "clinic_owner") return <EmptyState icon={UserRound} title="Clinic Owner access required" description="Only the Clinic Owner can create or manage staff accounts." />;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -445,14 +451,7 @@ export function ClinicUsers() {
     setError("");
     try {
       await clinicRepository.createClinicUser(form);
-      setForm({
-        full_name: "",
-        email: "",
-        password: "",
-        role: "receptionist",
-        specialty: "",
-        license_number: "",
-      });
+      setForm({ full_name: "", email: "", password: "", role: "receptionist", specialty: "", license_number: "" });
       setShow(false);
       await load();
     } catch (err) {
@@ -475,15 +474,10 @@ export function ClinicUsers() {
   return <div className="space-y-5">
     <div className="flex flex-col md:flex-row md:items-end justify-between gap-3">
       <div>
-        <h2 className="text-xl font-bold" style={{ color: "var(--primary)", fontFamily: "'Cormorant Garamond', serif" }}>
-          Users & Access
-        </h2>
-        <p className="text-xs" style={muted}>
-          Create Dentist, Receptionist, and Accountant accounts. The owner Admin account is permanent and cannot be reassigned. New staff must change their temporary password on first login.
-        </p>
+        <h2 className="text-xl font-bold" style={{ color: "var(--primary)", fontFamily: "'Cormorant Garamond', serif" }}>Users & Access</h2>
+        <p className="text-xs" style={muted}>Manage Dentist, Receptionist, and Accountant access for this clinic. The Clinic Owner is locked. New staff change their temporary password on first login.</p>
       </div>
-      <button onClick={() => setShow(!show)} className="px-3 py-2 rounded-xl text-sm font-semibold"
-        style={{ background: "var(--primary)", color: "white" }}>
+      <button onClick={() => setShow(!show)} className="px-3 py-2 rounded-xl text-sm font-semibold" style={{ background: "var(--primary)", color: "white" }}>
         <Plus size={13} className="inline mr-1" />Add Staff User
       </button>
     </div>
@@ -491,109 +485,44 @@ export function ClinicUsers() {
     {error && <div className="p-3 rounded-xl bg-red-50 text-red-700 text-sm">{error}</div>}
 
     {show && <form onSubmit={submit} className="rounded-2xl border p-4 grid md:grid-cols-2 xl:grid-cols-3 gap-3" style={cardStyle}>
-      <label className="text-xs font-semibold">Full name
-        <input required value={form.full_name} onChange={(e)=>setForm({...form,full_name:e.target.value})}
-          className="mt-1.5 w-full px-3 py-2.5 rounded-xl border bg-transparent" />
-      </label>
-      <label className="text-xs font-semibold">Email
-        <input required type="email" value={form.email} onChange={(e)=>setForm({...form,email:e.target.value})}
-          className="mt-1.5 w-full px-3 py-2.5 rounded-xl border bg-transparent" />
-      </label>
-      <label className="text-xs font-semibold">Temporary password
-        <input required minLength={8} type="password" value={form.password} onChange={(e)=>setForm({...form,password:e.target.value})}
-          className="mt-1.5 w-full px-3 py-2.5 rounded-xl border bg-transparent" />
-      </label>
+      <label className="text-xs font-semibold">Full name<input required value={form.full_name} onChange={(e)=>setForm({...form,full_name:e.target.value})} className="mt-1.5 w-full px-3 py-2.5 rounded-xl border bg-transparent" /></label>
+      <label className="text-xs font-semibold">Email<input required type="email" value={form.email} onChange={(e)=>setForm({...form,email:e.target.value})} className="mt-1.5 w-full px-3 py-2.5 rounded-xl border bg-transparent" /></label>
+      <label className="text-xs font-semibold">Temporary password<input required minLength={8} type="password" value={form.password} onChange={(e)=>setForm({...form,password:e.target.value})} className="mt-1.5 w-full px-3 py-2.5 rounded-xl border bg-transparent" /></label>
       <label className="text-xs font-semibold">Role
-        <select value={form.role} onChange={(e)=>setForm({...form,role:e.target.value as ManageableStaffRole})}
-          className="mt-1.5 w-full px-3 py-2.5 rounded-xl border bg-transparent">
-          <option value="dentist">Dentist</option>
-          <option value="receptionist">Receptionist</option>
-          <option value="accountant">Accountant</option>
+        <select value={form.role} onChange={(e)=>setForm({...form,role:e.target.value as ManageableStaffRole})} className="mt-1.5 w-full px-3 py-2.5 rounded-xl border bg-transparent">
+          <option value="dentist">Dentist</option><option value="receptionist">Receptionist</option><option value="accountant">Accountant</option>
         </select>
       </label>
-
       {form.role === "dentist" && <>
-        <label className="text-xs font-semibold">Specialty
-          <input value={form.specialty} onChange={(e)=>setForm({...form,specialty:e.target.value})}
-            placeholder="e.g. General Dentistry"
-            className="mt-1.5 w-full px-3 py-2.5 rounded-xl border bg-transparent" />
-        </label>
-        <label className="text-xs font-semibold">License number
-          <input value={form.license_number} onChange={(e)=>setForm({...form,license_number:e.target.value})}
-            className="mt-1.5 w-full px-3 py-2.5 rounded-xl border bg-transparent" />
-        </label>
+        <label className="text-xs font-semibold">Specialty<input value={form.specialty} onChange={(e)=>setForm({...form,specialty:e.target.value})} placeholder="e.g. General Dentistry" className="mt-1.5 w-full px-3 py-2.5 rounded-xl border bg-transparent" /></label>
+        <label className="text-xs font-semibold">License number<input value={form.license_number} onChange={(e)=>setForm({...form,license_number:e.target.value})} className="mt-1.5 w-full px-3 py-2.5 rounded-xl border bg-transparent" /></label>
       </>}
-
-      <div className="md:col-span-2 xl:col-span-3 flex justify-end">
-        <button disabled={saving} className="px-4 py-2.5 rounded-xl text-sm font-semibold"
-          style={{ background:"var(--accent)",color:"white" }}>
-          {saving ? "Creating..." : "Create Staff Account"}
-        </button>
-      </div>
+      <div className="md:col-span-2 xl:col-span-3 flex justify-end"><button disabled={saving} className="px-4 py-2.5 rounded-xl text-sm font-semibold" style={{ background:"var(--accent)",color:"white" }}>{saving ? "Creating..." : "Create Staff Account"}</button></div>
     </form>}
 
     <div className="rounded-2xl border overflow-hidden" style={cardStyle}>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[920px] text-sm">
-          <thead>
-            <tr className="text-left border-b" style={{ borderColor:"var(--border)", color:"var(--muted-foreground)" }}>
-              <th className="px-4 py-3">User</th>
-              <th className="px-4 py-3">Role</th>
-              <th className="px-4 py-3">Email</th>
-              <th className="px-4 py-3">Password</th>
-              <th className="px-4 py-3">Last sign-in</th>
-              <th className="px-4 py-3">Access</th>
-            </tr>
-          </thead>
+          <thead><tr className="text-left border-b" style={{ borderColor:"var(--border)", color:"var(--muted-foreground)" }}><th className="px-4 py-3">User</th><th className="px-4 py-3">Role</th><th className="px-4 py-3">Email</th><th className="px-4 py-3">Password</th><th className="px-4 py-3">Last sign-in</th><th className="px-4 py-3">Access</th></tr></thead>
           <tbody>
             {items.map((item)=><tr key={item.id} className="border-b last:border-0" style={{ borderColor:"var(--border)" }}>
+              <td className="px-4 py-3"><div className="font-semibold">{item.full_name || item.email}</div><div className="text-xs" style={muted}>{item.email}</div></td>
               <td className="px-4 py-3">
-                <div className="font-semibold">{item.full_name || item.email}</div>
-                <div className="text-xs" style={muted}>{item.email}</div>
+                {item.role === "clinic_owner" ? <div><div className="text-xs font-semibold" style={{ color:"var(--primary)" }}>Clinic Owner</div><div className="text-[11px]" style={muted}>Owner access · locked</div></div> :
+                  <select value={item.role} onChange={(e)=>void update(item,e.target.value as ManageableStaffRole,item.active)} className="px-2 py-1.5 rounded-lg border bg-transparent text-xs"><option value="dentist">Dentist</option><option value="receptionist">Receptionist</option><option value="accountant">Accountant</option></select>}
               </td>
+              <td className="px-4 py-3"><StatusBadge tone={item.email_confirmed_at ? "success" : "warning"}>{item.email_confirmed_at ? "Confirmed" : "Pending"}</StatusBadge></td>
+              <td className="px-4 py-3"><StatusBadge tone={item.must_change_password ? "warning" : "success"}>{item.must_change_password ? "Temporary" : "Private"}</StatusBadge></td>
+              <td className="px-4 py-3 text-xs" style={muted}>{item.last_sign_in_at ? new Date(item.last_sign_in_at).toLocaleString() : "Never"}</td>
               <td className="px-4 py-3">
-                {item.role === "admin" ? (
-                  <div>
-                    <div className="text-xs font-semibold" style={{ color: "var(--primary)" }}>Owner Admin</div>
-                    <div className="text-[11px]" style={muted}>Permanent clinic owner</div>
-                  </div>
-                ) : (
-                  <select value={item.role} onChange={(e)=>void update(item,e.target.value as ManageableStaffRole,item.active)}
-                    className="px-2 py-1.5 rounded-lg border bg-transparent text-xs">
-                    <option value="dentist">Dentist</option>
-                    <option value="receptionist">Receptionist</option>
-                    <option value="accountant">Accountant</option>
-                  </select>
-                )}
-              </td>
-              <td className="px-4 py-3">
-                <StatusBadge tone={item.email_confirmed_at ? "success" : "warning"}>
-                  {item.email_confirmed_at ? "Confirmed" : "Pending"}
-                </StatusBadge>
-              </td>
-              <td className="px-4 py-3">
-                <StatusBadge tone={item.must_change_password ? "warning" : "success"}>
-                  {item.must_change_password ? "Temporary" : "Private"}
-                </StatusBadge>
-              </td>
-              <td className="px-4 py-3 text-xs" style={muted}>
-                {item.last_sign_in_at ? new Date(item.last_sign_in_at).toLocaleString() : "Never"}
-              </td>
-              <td className="px-4 py-3">
-                {item.role === "admin" ? (
-                  <StatusBadge tone="success">Owner · Locked</StatusBadge>
-                ) : (
-                  <button onClick={()=>void update(item,item.role as ManageableStaffRole,!item.active)}>
-                    <StatusBadge tone={item.active ? "success" : "danger"}>{item.active ? "Active" : "Disabled"}</StatusBadge>
-                  </button>
-                )}
+                {item.role === "clinic_owner" ? <StatusBadge tone="success">Owner · Locked</StatusBadge> :
+                  <button onClick={()=>void update(item,item.role as ManageableStaffRole,!item.active)}><StatusBadge tone={item.active ? "success" : "danger"}>{item.active ? "Active" : "Disabled"}</StatusBadge></button>}
               </td>
             </tr>)}
           </tbody>
         </table>
       </div>
     </div>
-
-    {items.length === 0 && <EmptyState icon={UserRound} title="No staff users yet" description="Create the first staff account from this page." />}
+    {items.length === 0 && <EmptyState icon={UserRound} title="No staff users yet" description="Create the first staff account for this clinic." />}
   </div>;
 }
