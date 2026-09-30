@@ -6,6 +6,7 @@ import StaffChangePassword from "@/pages/staff/ChangePassword";
 import Layout from "@/components/Layout";
 import Home from "@/pages/Home";
 import PatientPortalLive from "@/pages/PatientPortalLive";
+import { CompletePatientProfile, PatientSignup } from "@/pages/patient/Signup";
 import AdminDashboardPage from "@/pages/AdminDashboard";
 import AccountingLive from "@/pages/AccountingLive";
 import Booking from "@/pages/Booking";
@@ -76,6 +77,8 @@ export default function App() {
           } />
 
           <Route path="/patient-portal/login" element={patientPortalElement} />
+          <Route path="/patient-portal/signup" element={<PatientSignup />} />
+          <Route path="/patient-portal/complete-profile" element={<CompletePatientProfile />} />
           <Route path="/patient-portal" element={patientPortalElement} />
           <Route path="/patient-portal/appointments" element={patientPortalElement} />
           <Route path="/patient-portal/invoices" element={patientPortalElement} />
