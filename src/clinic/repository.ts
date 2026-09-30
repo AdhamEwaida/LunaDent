@@ -60,14 +60,24 @@ function normalizePatientSearch(patient: Patient, query: string) {
   return haystack.includes(query.toLowerCase());
 }
 
+const ACTIVE_CLINIC_KEY = "lunadent_active_clinic_id";
+
+function currentClinicId(explicit?: string | null) {
+  const clinicId = explicit || localStorage.getItem(ACTIVE_CLINIC_KEY);
+  if (!clinicId) throw new Error("Select a clinic before using the clinic workspace.");
+  return clinicId;
+}
+
 export const clinicRepository = {
   mode: isSupabaseConfigured ? "supabase" : "demo" as "supabase" | "demo",
 
   async listPatients(query = ""): Promise<Patient[]> {
     if (supabase) {
+      const clinicId = currentClinicId();
       let request = supabase
         .from("patients")
         .select("*")
+        .eq("clinic_id", clinicId)
         .neq("status", "archived")
         .order("created_at", { ascending: false });
 
@@ -86,6 +96,7 @@ export const clinicRepository = {
   },
 
   async createMyPatientProfile(input: {
+    clinic_id: string;
     first_name: string;
     last_name: string;
     phone?: string;
@@ -100,6 +111,7 @@ export const clinicRepository = {
     }
 
     const { data, error } = await supabase.rpc("create_my_patient_profile", {
+      p_clinic_id: input.clinic_id,
       p_first_name: input.first_name.trim(),
       p_last_name: input.last_name.trim(),
       p_phone: input.phone?.trim() || null,
@@ -113,9 +125,11 @@ export const clinicRepository = {
     return String(data);
   },
 
-  async getPatientByAuthUserId(authUserId: string): Promise<Patient | null> {
+  async getPatientByAuthUserId(authUserId: string, clinicId?: string | null): Promise<Patient | null> {
     if (supabase) {
-      const { data, error } = await supabase.from("patients").select("*").eq("auth_user_id", authUserId).maybeSingle();
+      let request = supabase.from("patients").select("*").eq("auth_user_id", authUserId);
+      if (clinicId) request = request.eq("clinic_id", clinicId);
+      const { data, error } = await request.limit(1).maybeSingle();
       if (error) throw error;
       if (!data) return null;
       const { data: medical } = await supabase.from("patient_medical_history").select("blood_type,allergies,chronic_conditions,current_medications,dental_history,clinical_summary").eq("patient_id", data.id).maybeSingle();
@@ -126,7 +140,10 @@ export const clinicRepository = {
 
   async getPatient(id: string): Promise<Patient | null> {
     if (supabase) {
-      const { data, error } = await supabase.from("patients").select("*").eq("id", id).maybeSingle();
+      let request = supabase.from("patients").select("*").eq("id", id);
+      const clinicId = localStorage.getItem(ACTIVE_CLINIC_KEY);
+      if (clinicId) request = request.eq("clinic_id", clinicId);
+      const { data, error } = await request.maybeSingle();
       if (error) throw error;
       if (!data) return null;
       const { data: medical } = await supabase.from("patient_medical_history").select("blood_type,allergies,chronic_conditions,current_medications,dental_history,clinical_summary").eq("patient_id", id).maybeSingle();
@@ -137,9 +154,11 @@ export const clinicRepository = {
 
   async createPatient(input: Partial<Patient>): Promise<Patient> {
     if (supabase) {
+      const clinicId = currentClinicId();
       const { data, error } = await supabase
         .from("patients")
         .insert({
+          clinic_id: clinicId,
           first_name: input.first_name,
           last_name: input.last_name,
           phone: input.phone || null,
@@ -189,6 +208,7 @@ export const clinicRepository = {
         .from("patients")
         .update({ ...patch, id: undefined, patient_no: undefined, created_at: undefined })
         .eq("id", id)
+        .eq("clinic_id", currentClinicId())
         .select("*")
         .single();
       if (error) throw error;
@@ -203,7 +223,9 @@ export const clinicRepository = {
 
   async updatePatientMedicalHistory(patientId: string, patch: Pick<Patient, "blood_type" | "allergies" | "chronic_conditions" | "current_medications" | "dental_history" | "notes">): Promise<void> {
     if (supabase) {
+      const clinicId = currentClinicId();
       const { error } = await supabase.from("patient_medical_history").upsert({
+        clinic_id: clinicId,
         patient_id: patientId,
         blood_type: patch.blood_type || null,
         allergies: patch.allergies || null,
@@ -221,9 +243,11 @@ export const clinicRepository = {
 
   async listAppointments(patientId?: string): Promise<Appointment[]> {
     if (supabase) {
+      const clinicId = currentClinicId();
       let request = supabase
         .from("appointments")
         .select("*, patient:patients(id,patient_no,first_name,last_name), doctor:doctors(id,display_name), treatment:treatments(id,name_en,name_ar)")
+        .eq("clinic_id", clinicId)
         .order("start_at", { ascending: true });
       if (patientId) request = request.eq("patient_id", patientId);
       const { data, error } = await request;
@@ -239,6 +263,7 @@ export const clinicRepository = {
     if (!input.patient_id || !input.start_at || !input.end_at) throw new Error("Patient, start time and end time are required.");
     if (supabase) {
       const { data, error } = await supabase.from("appointments").insert({
+        clinic_id: currentClinicId(),
         patient_id: input.patient_id,
         doctor_id: input.doctor_id || null,
         treatment_id: input.treatment_id || null,
@@ -276,7 +301,7 @@ export const clinicRepository = {
 
   async listDentalChart(patientId: string): Promise<DentalChartEntry[]> {
     if (supabase) {
-      const { data, error } = await supabase.from("dental_chart_entries").select("*").eq("patient_id", patientId).order("recorded_at", { ascending: false });
+      const { data, error } = await supabase.from("dental_chart_entries").select("*").eq("clinic_id", currentClinicId()).eq("patient_id", patientId).order("recorded_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as DentalChartEntry[];
     }
@@ -285,7 +310,7 @@ export const clinicRepository = {
 
   async saveDentalChartEntry(input: Omit<DentalChartEntry, "id" | "recorded_at">): Promise<DentalChartEntry> {
     if (supabase) {
-      const { data, error } = await supabase.from("dental_chart_entries").insert(input).select("*").single();
+      const { data, error } = await supabase.from("dental_chart_entries").insert({ ...input, clinic_id: currentClinicId() }).select("*").single();
       if (error) throw error;
       return data as DentalChartEntry;
     }
@@ -297,7 +322,7 @@ export const clinicRepository = {
 
   async listTreatmentPlans(patientId?: string): Promise<TreatmentPlan[]> {
     if (supabase) {
-      let request = supabase.from("treatment_plans").select("*, patient:patients(id,patient_no,first_name,last_name)").order("created_at", { ascending: false });
+      let request = supabase.from("treatment_plans").select("*, patient:patients(id,patient_no,first_name,last_name)").eq("clinic_id", currentClinicId()).order("created_at", { ascending: false });
       if (patientId) request = request.eq("patient_id", patientId);
       const { data, error } = await request;
       if (error) throw error;
@@ -311,6 +336,7 @@ export const clinicRepository = {
     if (!input.patient_id || !input.title) throw new Error("Patient and title are required.");
     if (supabase) {
       const { data, error } = await supabase.from("treatment_plans").insert({
+        clinic_id: currentClinicId(),
         patient_id: input.patient_id,
         title: input.title,
         status: input.status || "draft",
@@ -340,7 +366,7 @@ export const clinicRepository = {
 
   async listClinicalNotes(patientId: string): Promise<ClinicalNote[]> {
     if (supabase) {
-      const { data, error } = await supabase.from("clinical_notes").select("*").eq("patient_id", patientId).order("created_at", { ascending: false });
+      const { data, error } = await supabase.from("clinical_notes").select("*").eq("clinic_id", currentClinicId()).eq("patient_id", patientId).order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as ClinicalNote[];
     }
@@ -349,7 +375,7 @@ export const clinicRepository = {
 
   async createClinicalNote(patientId: string, note: string, noteType: ClinicalNote["note_type"] = "progress"): Promise<ClinicalNote> {
     if (supabase) {
-      const { data, error } = await supabase.from("clinical_notes").insert({ patient_id: patientId, note, note_type: noteType }).select("*").single();
+      const { data, error } = await supabase.from("clinical_notes").insert({ clinic_id: currentClinicId(), patient_id: patientId, note, note_type: noteType }).select("*").single();
       if (error) throw error;
       return data as ClinicalNote;
     }
@@ -361,7 +387,7 @@ export const clinicRepository = {
 
   async listInvoices(patientId?: string): Promise<Invoice[]> {
     if (supabase) {
-      let request = supabase.from("invoices").select("*, patient:patients(id,patient_no,first_name,last_name)").order("created_at", { ascending: false });
+      let request = supabase.from("invoices").select("*, patient:patients(id,patient_no,first_name,last_name)").eq("clinic_id", currentClinicId()).order("created_at", { ascending: false });
       if (patientId) request = request.eq("patient_id", patientId);
       const { data, error } = await request;
       if (error) throw error;
@@ -413,7 +439,7 @@ export const clinicRepository = {
 
   async listPayments(patientId?: string): Promise<Payment[]> {
     if (supabase) {
-      let request = supabase.from("payments").select("*").order("paid_at", { ascending: false });
+      let request = supabase.from("payments").select("*").eq("clinic_id", currentClinicId()).order("paid_at", { ascending: false });
       if (patientId) request = request.eq("patient_id", patientId);
       const { data, error } = await request;
       if (error) throw error;
@@ -425,7 +451,10 @@ export const clinicRepository = {
 
   async listPatientDocuments(patientId: string): Promise<PatientDocument[]> {
     if (supabase) {
-      const { data, error } = await supabase.from("patient_documents").select("*").eq("patient_id", patientId).eq("patient_visible", true).order("created_at", { ascending: false });
+      let request = supabase.from("patient_documents").select("*").eq("patient_id", patientId).eq("patient_visible", true);
+      const clinicId = localStorage.getItem(ACTIVE_CLINIC_KEY);
+      if (clinicId) request = request.eq("clinic_id", clinicId);
+      const { data, error } = await request.order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as PatientDocument[];
     }
@@ -441,38 +470,56 @@ export const clinicRepository = {
 
   async listInventory(): Promise<InventoryItem[]> {
     if (supabase) {
-      const { data, error } = await supabase.from("inventory_items").select("*").eq("active", true).order("name");
+      const { data, error } = await supabase.from("inventory_items").select("*").eq("clinic_id", currentClinicId()).eq("active", true).order("name");
       if (error) throw error;
       return (data ?? []) as InventoryItem[];
     }
     return loadLocal<InventoryItem[]>("inventory", demoInventory);
   },
 
-  async createBookingRequest(input: { full_name: string; email?: string; phone: string; requested_treatment?: string; requested_doctor?: string; preferred_date?: string; preferred_time?: string; notes?: string }): Promise<BookingRequest> {
+  async createBookingRequest(input: { clinic_id?: string; full_name: string; email?: string; phone: string; requested_treatment?: string; requested_doctor?: string; preferred_date?: string; preferred_time?: string; notes?: string }): Promise<BookingRequest> {
     if (!input.full_name.trim() || !input.phone.trim()) throw new Error("Name and phone are required.");
+
+    const clinicId = currentClinicId(input.clinic_id);
+    const created: BookingRequest = {
+      id: crypto.randomUUID(),
+      full_name: input.full_name.trim(),
+      email: input.email?.trim() || null,
+      phone: input.phone.trim(),
+      requested_treatment: input.requested_treatment || null,
+      requested_doctor: input.requested_doctor || null,
+      preferred_date: input.preferred_date || null,
+      preferred_time: input.preferred_time || null,
+      notes: input.notes?.trim() || null,
+      status: "new",
+      created_at: new Date().toISOString(),
+    };
+
     if (supabase) {
-      const { data, error } = await supabase.from("booking_requests").insert({
-        full_name: input.full_name.trim(),
-        email: input.email?.trim() || null,
-        phone: input.phone.trim(),
-        requested_treatment: input.requested_treatment || null,
-        requested_doctor: input.requested_doctor || null,
-        preferred_date: input.preferred_date || null,
-        preferred_time: input.preferred_time || null,
-        notes: input.notes?.trim() || null,
-      }).select("id,status,created_at").single();
+      const { error } = await supabase.from("booking_requests").insert({
+        id: created.id,
+        clinic_id: clinicId,
+        full_name: created.full_name,
+        email: created.email,
+        phone: created.phone,
+        requested_treatment: created.requested_treatment,
+        requested_doctor: created.requested_doctor,
+        preferred_date: created.preferred_date,
+        preferred_time: created.preferred_time,
+        notes: created.notes,
+      });
       if (error) throw error;
-      return data;
+      return created;
     }
+
     const requests = loadLocal<BookingRequest[]>("booking_requests", []);
-    const created: BookingRequest = { id: crypto.randomUUID(), full_name: input.full_name, email: input.email || null, phone: input.phone, requested_treatment: input.requested_treatment || null, requested_doctor: input.requested_doctor || null, preferred_date: input.preferred_date || null, preferred_time: input.preferred_time || null, notes: input.notes || null, status: "new", created_at: new Date().toISOString() };
     saveLocal("booking_requests", [created, ...requests]);
     return created;
   },
 
   async listBookingRequests(): Promise<BookingRequest[]> {
     if (supabase) {
-      const { data, error } = await supabase.from("booking_requests").select("*").order("created_at", { ascending: false });
+      const { data, error } = await supabase.from("booking_requests").select("*").eq("clinic_id", currentClinicId()).order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as BookingRequest[];
     }
@@ -481,7 +528,7 @@ export const clinicRepository = {
 
   async updateBookingRequestStatus(id: string, status: BookingRequest["status"]): Promise<void> {
     if (supabase) {
-      const { error } = await supabase.from("booking_requests").update({ status }).eq("id", id);
+      const { error } = await supabase.from("booking_requests").update({ status }).eq("id", id).eq("clinic_id", currentClinicId());
       if (error) throw error;
       return;
     }
@@ -491,7 +538,7 @@ export const clinicRepository = {
 
   async listDoctors(): Promise<Doctor[]> {
     if (supabase) {
-      const { data, error } = await supabase.from("doctors").select("*").eq("active", true).order("display_name");
+      const { data, error } = await supabase.from("doctors").select("*").eq("clinic_id", currentClinicId()).eq("active", true).order("display_name");
       if (error) throw error;
       return (data ?? []) as Doctor[];
     }
@@ -500,7 +547,7 @@ export const clinicRepository = {
 
   async listTreatments(): Promise<TreatmentCatalogItem[]> {
     if (supabase) {
-      const { data, error } = await supabase.from("treatments").select("*").eq("active", true).order("name_en");
+      const { data, error } = await supabase.from("treatments").select("*").eq("clinic_id", currentClinicId()).eq("active", true).order("name_en");
       if (error) throw error;
       return (data ?? []) as TreatmentCatalogItem[];
     }
@@ -511,6 +558,7 @@ export const clinicRepository = {
     if (!input.display_name.trim()) throw new Error("Doctor name is required.");
     if (!supabase) throw new Error("Live database is required for doctor management.");
     const { data, error } = await supabase.from("doctors").insert({
+      clinic_id: currentClinicId(),
       display_name: input.display_name.trim(),
       specialty: input.specialty?.trim() || null,
       phone: input.phone?.trim() || null,
@@ -525,6 +573,7 @@ export const clinicRepository = {
     if (!input.code.trim() || !input.name_en.trim()) throw new Error("Code and treatment name are required.");
     if (!supabase) throw new Error("Live database is required for treatment management.");
     const { data, error } = await supabase.from("treatments").insert({
+      clinic_id: currentClinicId(),
       code: input.code.trim().toUpperCase(),
       name_en: input.name_en.trim(),
       name_ar: input.name_ar?.trim() || null,
@@ -539,6 +588,7 @@ export const clinicRepository = {
     if (!input.sku.trim() || !input.name.trim()) throw new Error("SKU and name are required.");
     if (!supabase) throw new Error("Live database is required for inventory management.");
     const { data, error } = await supabase.from("inventory_items").insert({
+      clinic_id: currentClinicId(),
       sku: input.sku.trim().toUpperCase(), name: input.name.trim(), category: input.category?.trim() || null,
       quantity: input.quantity, unit: input.unit?.trim() || null, minimum_stock: input.minimum_stock,
       cost_per_unit: input.cost_per_unit, supplier: input.supplier?.trim() || null, batch_no: input.batch_no?.trim() || null,
@@ -569,7 +619,7 @@ export const clinicRepository = {
 
   async listClinicUsers(): Promise<Array<{ id: string; email?: string; full_name?: string; role: string; active: boolean; last_sign_in_at?: string | null; email_confirmed_at?: string | null; must_change_password?: boolean }>> {
     if (!supabase) return [];
-    const { data, error } = await supabase.functions.invoke("manage-clinic-users", { body: { action: "list" } });
+    const { data, error } = await supabase.functions.invoke("manage-clinic-users", { body: { action: "list", clinic_id: currentClinicId() } });
     if (error) throw error;
     if (data?.error) throw new Error(String(data.error));
     return data?.users ?? [];
@@ -577,34 +627,35 @@ export const clinicRepository = {
 
   async createClinicUser(input: { email: string; password: string; full_name: string; role: "dentist" | "receptionist" | "accountant"; specialty?: string; license_number?: string }): Promise<void> {
     if (!supabase) throw new Error("Live database is required for user management.");
-    const { data, error } = await supabase.functions.invoke("manage-clinic-users", { body: { action: "create", ...input } });
+    const { data, error } = await supabase.functions.invoke("manage-clinic-users", { body: { action: "create", clinic_id: currentClinicId(), ...input } });
     if (error) throw error;
     if (data?.error) throw new Error(String(data.error));
   },
 
   async updateClinicUser(input: { user_id: string; role: "dentist" | "receptionist" | "accountant"; active: boolean }): Promise<void> {
     if (!supabase) throw new Error("Live database is required for user management.");
-    const { data, error } = await supabase.functions.invoke("manage-clinic-users", { body: { action: "update", ...input } });
+    const { data, error } = await supabase.functions.invoke("manage-clinic-users", { body: { action: "update", clinic_id: currentClinicId(), ...input } });
     if (error) throw error;
     if (data?.error) throw new Error(String(data.error));
   },
 
   async getDashboardSummary(): Promise<{ totalPatients: number; todayAppointments: number; outstandingBalance: number; activeLeads: number; lowStock: number; monthlyRevenue: number; recentAppointments: Appointment[] }> {
     if (!supabase) return { totalPatients: demoPatients.length, todayAppointments: demoAppointments.length, outstandingBalance: demoInvoices.reduce((s, i) => s + Number(i.balance_due), 0), activeLeads: 0, lowStock: demoInventory.filter((i) => i.quantity <= i.minimum_stock).length, monthlyRevenue: demoPayments.reduce((s, p) => s + Number(p.amount), 0), recentAppointments: demoAppointments.slice(0, 5) };
+    const clinicId = currentClinicId();
     const now = new Date();
     const dayStart = new Date(now); dayStart.setHours(0,0,0,0);
     const dayEnd = new Date(now); dayEnd.setHours(23,59,59,999);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const [patientsRes, apptsRes, invoicesRes, inventoryRes, paymentsRes] = await Promise.all([
-      supabase.from("patients").select("id", { count: "exact", head: true }).neq("status", "archived"),
-      supabase.from("appointments").select("*, patient:patients(id,patient_no,first_name,last_name), doctor:doctors(id,display_name), treatment:treatments(id,name_en,name_ar)").gte("start_at", dayStart.toISOString()).lte("start_at", dayEnd.toISOString()).order("start_at").limit(8),
-      supabase.from("invoices").select("balance_due").neq("status", "void"),
-      supabase.from("inventory_items").select("quantity,minimum_stock").eq("active", true),
-      supabase.from("payments").select("amount").gte("paid_at", monthStart.toISOString()),
+      supabase.from("patients").select("id", { count: "exact", head: true }).eq("clinic_id", clinicId).neq("status", "archived"),
+      supabase.from("appointments").select("*, patient:patients(id,patient_no,first_name,last_name), doctor:doctors(id,display_name), treatment:treatments(id,name_en,name_ar)").eq("clinic_id", clinicId).gte("start_at", dayStart.toISOString()).lte("start_at", dayEnd.toISOString()).order("start_at").limit(8),
+      supabase.from("invoices").select("balance_due").eq("clinic_id", clinicId).neq("status", "void"),
+      supabase.from("inventory_items").select("quantity,minimum_stock").eq("clinic_id", clinicId).eq("active", true),
+      supabase.from("payments").select("amount").eq("clinic_id", clinicId).gte("paid_at", monthStart.toISOString()),
     ]);
     for (const response of [patientsRes, apptsRes, invoicesRes, inventoryRes, paymentsRes]) if (response.error) throw response.error;
     let activeLeads = 0;
-    const leadRes = await supabase.from("booking_requests").select("id", { count: "exact", head: true }).in("status", ["new","contacted"]);
+    const leadRes = await supabase.from("booking_requests").select("id", { count: "exact", head: true }).eq("clinic_id", clinicId).in("status", ["new","contacted"]);
     if (!leadRes.error) activeLeads = leadRes.count || 0;
     return {
       totalPatients: patientsRes.count || 0,
