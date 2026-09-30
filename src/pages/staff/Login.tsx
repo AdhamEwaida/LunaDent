@@ -54,8 +54,7 @@ export default function StaffLogin() {
     setError("");
     try {
       await signIn(email.trim(), password);
-      const destination = (location.state as { from?: string } | null)?.from || "/admin";
-      navigate(destination, { replace: true });
+      // AuthContext resolves platform and clinic roles before this page redirects.
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to sign in.");
     } finally {
