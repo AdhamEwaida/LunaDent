@@ -539,7 +539,7 @@ export const clinicRepository = {
     if (error) throw error;
   },
 
-  async listClinicUsers(): Promise<Array<{ id: string; email?: string; full_name?: string; role: string; active: boolean; last_sign_in_at?: string | null; email_confirmed_at?: string | null }>> {
+  async listClinicUsers(): Promise<Array<{ id: string; email?: string; full_name?: string; role: string; active: boolean; last_sign_in_at?: string | null; email_confirmed_at?: string | null; must_change_password?: boolean }>> {
     if (!supabase) return [];
     const { data, error } = await supabase.functions.invoke("manage-clinic-users", { body: { action: "list" } });
     if (error) throw error;
@@ -547,14 +547,14 @@ export const clinicRepository = {
     return data?.users ?? [];
   },
 
-  async createClinicUser(input: { email: string; password: string; full_name: string; role: "admin" | "dentist" | "receptionist" | "accountant" | "patient"; patient_id?: string }): Promise<void> {
+  async createClinicUser(input: { email: string; password: string; full_name: string; role: "admin" | "dentist" | "receptionist" | "accountant"; specialty?: string; license_number?: string }): Promise<void> {
     if (!supabase) throw new Error("Live database is required for user management.");
     const { data, error } = await supabase.functions.invoke("manage-clinic-users", { body: { action: "create", ...input } });
     if (error) throw error;
     if (data?.error) throw new Error(String(data.error));
   },
 
-  async updateClinicUser(input: { user_id: string; role: "admin" | "dentist" | "receptionist" | "accountant" | "patient"; active: boolean }): Promise<void> {
+  async updateClinicUser(input: { user_id: string; role: "admin" | "dentist" | "receptionist" | "accountant"; active: boolean }): Promise<void> {
     if (!supabase) throw new Error("Live database is required for user management.");
     const { data, error } = await supabase.functions.invoke("manage-clinic-users", { body: { action: "update", ...input } });
     if (error) throw error;
