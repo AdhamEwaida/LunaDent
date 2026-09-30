@@ -1,4 +1,5 @@
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { resolveClinicId } from "@/clinic/scope";
 import {
   demoAppointments,
   demoClinicalNotes,
@@ -60,33 +61,17 @@ function normalizePatientSearch(patient: Patient, query: string) {
   return haystack.includes(query.toLowerCase());
 }
 
-const ACTIVE_CLINIC_KEY = "lunadent_active_clinic_id";
-
-function currentClinicId(explicit?: string | null) {
-  const clinicId = explicit || localStorage.getItem(ACTIVE_CLINIC_KEY);
-  if (!clinicId) throw new Error("Select a clinic before using the clinic workspace.");
-  return clinicId;
-}
+const currentClinicId = (explicit?: string | null) => resolveClinicId(explicit);
 
 export const clinicRepository = {
   mode: isSupabaseConfigured ? "supabase" : "demo" as "supabase" | "demo",
 
   async listPatients(query = ""): Promise<Patient[]> {
     if (supabase) {
-      const clinicId = currentClinicId();
-      let request = supabase
-        .from("patients")
-        .select("*")
-        .eq("clinic_id", clinicId)
-        .neq("status", "archived")
-        .order("created_at", { ascending: false });
-
-      if (query.trim()) {
-        const safe = query.trim().replaceAll(",", " ");
-        request = request.or(`first_name.ilike.%${safe}%,last_name.ilike.%${safe}%,patient_no.ilike.%${safe}%,phone.ilike.%${safe}%,email.ilike.%${safe}%`);
-      }
-
-      const { data, error } = await request;
+      const { data, error } = await supabase.rpc("search_patients", {
+        p_clinic_id: currentClinicId(),
+        p_query: query.trim() || null,
+      });
       if (error) throw error;
       return (data ?? []) as Patient[];
     }
@@ -216,9 +201,22 @@ export const clinicRepository = {
 
   async updatePatient(id: string, patch: Partial<Patient>): Promise<Patient> {
     if (supabase) {
+      const allowed = {
+        first_name: patch.first_name,
+        last_name: patch.last_name,
+        date_of_birth: patch.date_of_birth,
+        sex: patch.sex,
+        phone: patch.phone,
+        email: patch.email,
+        address: patch.address,
+        emergency_contact_name: patch.emergency_contact_name,
+        emergency_contact_phone: patch.emergency_contact_phone,
+        status: patch.status,
+      };
+      const payload = Object.fromEntries(Object.entries(allowed).filter(([, value]) => value !== undefined));
       const { data, error } = await supabase
         .from("patients")
-        .update({ ...patch, id: undefined, patient_no: undefined, created_at: undefined })
+        .update(payload)
         .eq("id", id)
         .eq("clinic_id", currentClinicId())
         .select("*")
@@ -464,7 +462,7 @@ export const clinicRepository = {
   async listPatientDocuments(patientId: string, clinicIdOverride?: string | null): Promise<PatientDocument[]> {
     if (supabase) {
       let request = supabase.from("patient_documents").select("*").eq("patient_id", patientId).eq("patient_visible", true);
-      const clinicId = clinicIdOverride || localStorage.getItem(ACTIVE_CLINIC_KEY);
+      const clinicId = clinicIdOverride || (typeof window !== "undefined" ? window.localStorage.getItem("lunadent_active_clinic_id") : null);
       if (clinicId) request = request.eq("clinic_id", clinicId);
       const { data, error } = await request.order("created_at", { ascending: false });
       if (error) throw error;
