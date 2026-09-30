@@ -560,3 +560,116 @@ end;
 $$;
 revoke all on function public.record_invoice_payment(uuid,numeric,text,text) from public, anon;
 grant execute on function public.record_invoice_payment(uuid,numeric,text,text) to authenticated;
+
+
+-- Production auth and patient self-service hardening.
+create unique index if not exists profiles_single_admin_idx
+  on public.profiles (role)
+  where role = 'admin'::public.app_role;
+
+create or replace function private.protect_owner_admin()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if tg_op = 'UPDATE'
+     and old.role = 'admin'::public.app_role
+     and (
+       new.role <> 'admin'::public.app_role
+       or new.active is distinct from true
+     ) then
+    raise exception 'The owner administrator account must remain active and admin';
+  end if;
+  return new;
+end;
+$$;
+revoke all on function private.protect_owner_admin() from public, anon, authenticated;
+
+drop trigger if exists profiles_protect_owner_admin on public.profiles;
+create trigger profiles_protect_owner_admin
+before update of role, active on public.profiles
+for each row execute function private.protect_owner_admin();
+
+drop policy if exists patients_self_insert on public.patients;
+create policy patients_self_insert
+on public.patients
+for insert
+to authenticated
+with check (
+  auth_user_id = (select auth.uid())
+  and created_by = (select auth.uid())
+  and private.current_user_role() = 'patient'::public.app_role
+  and status = 'active'::public.patient_status
+);
+
+create or replace function public.create_my_patient_profile(
+  p_first_name text,
+  p_last_name text,
+  p_phone text default null,
+  p_email text default null,
+  p_date_of_birth date default null,
+  p_sex text default null,
+  p_address text default null
+)
+returns uuid
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_user_id uuid := auth.uid();
+  v_patient_id uuid;
+begin
+  if v_user_id is null then
+    raise exception 'Authentication required';
+  end if;
+
+  if private.current_user_role() <> 'patient'::public.app_role then
+    raise exception 'Patient account required';
+  end if;
+
+  if nullif(trim(p_first_name), '') is null or nullif(trim(p_last_name), '') is null then
+    raise exception 'First and last name are required';
+  end if;
+
+  select p.id into v_patient_id
+  from public.patients p
+  where p.auth_user_id = v_user_id;
+
+  if v_patient_id is not null then
+    return v_patient_id;
+  end if;
+
+  insert into public.patients (
+    auth_user_id,
+    first_name,
+    last_name,
+    phone,
+    email,
+    date_of_birth,
+    sex,
+    address,
+    status,
+    created_by
+  )
+  values (
+    v_user_id,
+    trim(p_first_name),
+    trim(p_last_name),
+    nullif(trim(p_phone), ''),
+    nullif(lower(trim(p_email)), ''),
+    p_date_of_birth,
+    case when p_sex in ('male','female','other') then p_sex else null end,
+    nullif(trim(p_address), ''),
+    'active'::public.patient_status,
+    v_user_id
+  )
+  returning id into v_patient_id;
+
+  return v_patient_id;
+end;
+$$;
+revoke all on function public.create_my_patient_profile(text,text,text,text,date,text,text) from public, anon;
+grant execute on function public.create_my_patient_profile(text,text,text,text,date,text,text) to authenticated;
