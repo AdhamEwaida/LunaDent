@@ -1,6 +1,6 @@
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { Building2, Check, ChevronLeft, ChevronRight, ImagePlus, Palette, Sparkles, Upload } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
 import { saasRepository } from "@/saas/repository";
 import type { ClinicSiteSettings, SiteTokens, ThemeDefinition } from "@/saas/types";
@@ -69,8 +69,7 @@ export default function ClinicOnboarding() {
     return <div className="min-h-screen grid place-items-center bg-slate-50 text-slate-500">Clinic Owner access required.</div>;
   }
   if (activeClinic.onboarding_completed) {
-    navigate("/admin", { replace: true });
-    return null;
+    return <Navigate to="/admin" replace />;
   }
 
   const chooseTheme = (theme: ThemeDefinition) => {
