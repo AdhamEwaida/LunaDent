@@ -11,8 +11,6 @@ type AuthState = {
   mustChangePassword: boolean;
   demoMode: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, fullName?: string) => Promise<{ needsEmailConfirmation: boolean }>;
-  claimInitialAdmin: (code: string) => Promise<void>;
   changePassword: (newPassword: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -103,32 +101,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-    },
-    signUp: async (email, password, fullName) => {
-      if (!supabase) return { needsEmailConfirmation: false };
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { full_name: fullName || email },
-          emailRedirectTo: `${import.meta.env.VITE_SITE_URL || window.location.origin}/staff/login`,
-        },
-      });
-      if (error) throw error;
-      return { needsEmailConfirmation: !data.session };
-    },
-    claimInitialAdmin: async (code) => {
-      if (!supabase) { setRole("admin"); return; }
-      const { data, error } = await supabase.functions.invoke("claim-initial-admin", { body: { code } });
-      if (error) throw error;
-      if (data?.error) throw new Error(String(data.error));
-      const { data: { user: refreshedUser } } = await supabase.auth.getUser();
-      if (refreshedUser) {
-        setUser(refreshedUser);
-        const { data: profile } = await supabase.from("profiles").select("role,active").eq("id", refreshedUser.id).maybeSingle();
-        setAccountActive(profile?.active !== false);
-        setRole((profile?.role as AppRole | undefined) ?? "patient");
-      }
     },
     changePassword: async (newPassword) => {
       if (!supabase) return;
