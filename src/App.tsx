@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/auth/AuthContext";
 import ProtectedRoute from "@/auth/ProtectedRoute";
 import StaffLogin from "@/pages/staff/Login";
+import StaffChangePassword from "@/pages/staff/ChangePassword";
 import Layout from "@/components/Layout";
 import Home from "@/pages/Home";
 import PatientPortalLive from "@/pages/PatientPortalLive";
@@ -33,8 +34,8 @@ function NotFound() {
 
 export default function App() {
   const staffRoles = ["admin", "dentist", "receptionist", "accountant"] as const;
-  const adminElement = (
-    <ProtectedRoute roles={[...staffRoles]}>
+  const secureAdmin = (roles: Array<(typeof staffRoles)[number]>) => (
+    <ProtectedRoute roles={roles}>
       <AdminDashboardPage />
     </ProtectedRoute>
   );
@@ -68,6 +69,11 @@ export default function App() {
           <Route path="/terms" element={<Layout><Contact /></Layout>} />
 
           <Route path="/staff/login" element={<StaffLogin />} />
+          <Route path="/staff/change-password" element={
+            <ProtectedRoute roles={[...staffRoles]}>
+              <StaffChangePassword />
+            </ProtectedRoute>
+          } />
 
           <Route path="/patient-portal/login" element={patientPortalElement} />
           <Route path="/patient-portal" element={patientPortalElement} />
@@ -79,16 +85,16 @@ export default function App() {
           <Route path="/patient-portal/messages" element={patientPortalElement} />
           <Route path="/patient-portal/settings" element={patientPortalElement} />
 
-          <Route path="/admin" element={adminElement} />
-          <Route path="/admin/patients" element={adminElement} />
-          <Route path="/admin/patients/:patientId" element={adminElement} />
-          <Route path="/admin/appointments" element={adminElement} />
-          <Route path="/admin/treatment-plans" element={adminElement} />
-          <Route path="/admin/inventory" element={adminElement} />
-          <Route path="/admin/leads" element={adminElement} />
-          <Route path="/admin/doctors" element={adminElement} />
-          <Route path="/admin/services" element={adminElement} />
-          <Route path="/admin/users" element={<ProtectedRoute roles={["admin"]}><AdminDashboardPage /></ProtectedRoute>} />
+          <Route path="/admin" element={secureAdmin([...staffRoles])} />
+          <Route path="/admin/patients" element={secureAdmin([...staffRoles])} />
+          <Route path="/admin/patients/:patientId" element={secureAdmin([...staffRoles])} />
+          <Route path="/admin/appointments" element={secureAdmin(["admin", "dentist", "receptionist"])} />
+          <Route path="/admin/treatment-plans" element={secureAdmin(["admin", "dentist"])} />
+          <Route path="/admin/inventory" element={secureAdmin(["admin", "dentist"])} />
+          <Route path="/admin/leads" element={secureAdmin(["admin", "receptionist"])} />
+          <Route path="/admin/doctors" element={secureAdmin(["admin", "receptionist"])} />
+          <Route path="/admin/services" element={secureAdmin(["admin", "receptionist"])} />
+          <Route path="/admin/users" element={secureAdmin(["admin"])} />
 
           <Route path="/accounting" element={accountingElement} />
           <Route path="/accounting/invoices" element={accountingElement} />

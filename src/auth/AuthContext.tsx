@@ -7,10 +7,13 @@ type AuthState = {
   user: User | null;
   role: AppRole | null;
   loading: boolean;
+  accountActive: boolean;
+  mustChangePassword: boolean;
   demoMode: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, fullName?: string) => Promise<{ needsEmailConfirmation: boolean }>;
   claimInitialAdmin: (code: string) => Promise<void>;
+  changePassword: (newPassword: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -29,21 +32,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(isSupabaseConfigured ? null : demoUser);
   const [role, setRole] = useState<AppRole | null>(isSupabaseConfigured ? null : "admin");
   const [loading, setLoading] = useState(isSupabaseConfigured);
+  const [accountActive, setAccountActive] = useState(!isSupabaseConfigured);
 
   useEffect(() => {
     if (!supabase) return;
-    let active = true;
+    let mounted = true;
 
     const loadRole = async (nextUser: User | null) => {
-      if (!active) return;
+      if (!mounted) return;
       setUser(nextUser);
       if (!nextUser) {
         setRole(null);
+        setAccountActive(false);
         setLoading(false);
         return;
       }
-      const { data } = await supabase.from("profiles").select("role").eq("id", nextUser.id).maybeSingle();
-      if (!active) return;
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("role,active")
+        .eq("id", nextUser.id)
+        .maybeSingle();
+
+      if (!mounted) return;
+      if (error) {
+        setRole(null);
+        setAccountActive(false);
+        setLoading(false);
+        return;
+      }
+
+      if (data?.active === false) {
+        await supabase.auth.signOut();
+        if (!mounted) return;
+        setUser(null);
+        setRole(null);
+        setAccountActive(false);
+        setLoading(false);
+        return;
+      }
+
+      setAccountActive(true);
       setRole((data?.role as AppRole | undefined) ?? "patient");
       setLoading(false);
     };
@@ -54,7 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => {
-      active = false;
+      mounted = false;
       listener.subscription.unsubscribe();
     };
   }, []);
@@ -63,6 +92,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     role,
     loading,
+    accountActive,
+    mustChangePassword: Boolean(user?.app_metadata?.must_change_password),
     demoMode: !isSupabaseConfigured,
     signIn: async (email, password) => {
       if (!supabase) {
@@ -94,16 +125,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data: { user: refreshedUser } } = await supabase.auth.getUser();
       if (refreshedUser) {
         setUser(refreshedUser);
-        const { data: profile } = await supabase.from("profiles").select("role").eq("id", refreshedUser.id).maybeSingle();
+        const { data: profile } = await supabase.from("profiles").select("role,active").eq("id", refreshedUser.id).maybeSingle();
+        setAccountActive(profile?.active !== false);
         setRole((profile?.role as AppRole | undefined) ?? "patient");
       }
+    },
+    changePassword: async (newPassword) => {
+      if (!supabase) return;
+      if (newPassword.length < 8) throw new Error("Password must be at least 8 characters.");
+      const { data, error } = await supabase.functions.invoke("manage-clinic-users", {
+        body: { action: "change_password", new_password: newPassword },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(String(data.error));
+      const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError) throw refreshError;
+      if (refreshed.user) setUser(refreshed.user);
     },
     signOut: async () => {
       if (!supabase) return;
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
     },
-  }), [user, role, loading]);
+  }), [user, role, loading, accountActive]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

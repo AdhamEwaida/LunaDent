@@ -23,7 +23,6 @@ const ADMIN_NAV = [
   { icon: Briefcase, label: "Treatments", path: "/admin/services", section: "clinic" },
   { icon: Package, label: "Inventory", path: "/admin/inventory", section: "clinic" },
   { icon: FileText, label: "Accounting", path: "/accounting", section: "finance" },
-  { icon: Settings, label: "Users & Access", path: "/admin/users", section: "system" },
 ];
 
 const SECTIONS = { main: "Operations", clinic: "Clinical", marketing: "Marketing", finance: "Finance", system: "System" };
@@ -86,6 +85,15 @@ function AdminSidebar({ open, setOpen }: { open: boolean; setOpen: (v: boolean) 
         </div>
 
         <div className="p-3 border-t space-y-1" style={{ borderColor: "rgba(255,255,255,0.1)" }}>
+          {role === "admin" && (
+            <Link to="/admin/users" className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm"
+              style={{
+                color: location.pathname === "/admin/users" ? "white" : "rgba(255,255,255,0.72)",
+                background: location.pathname === "/admin/users" ? "rgba(255,255,255,0.15)" : "transparent",
+              }}>
+              <Settings size={14} />Users & Access
+            </Link>
+          )}
           <Link to="/" className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm" style={{ color: "rgba(255,255,255,0.5)" }}>
             <Smile size={14} />Back to Website
           </Link>
@@ -99,6 +107,10 @@ function AdminSidebar({ open, setOpen }: { open: boolean; setOpen: (v: boolean) 
 }
 
 function AdminHeader({ title, setOpen }: { title: string; setOpen: (v: boolean) => void }) {
+  const { user, role } = useAuth();
+  const displayName = String(user?.user_metadata?.full_name || user?.email || role || "Staff");
+  const initials = displayName.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "ST";
+  const roleLabel = role ? role.charAt(0).toUpperCase() + role.slice(1) : "Staff";
   return (
     <header className="h-14 border-b flex items-center px-4 gap-3"
       style={{ background: "var(--card)", borderColor: "var(--border)" }}>
@@ -114,8 +126,8 @@ function AdminHeader({ title, setOpen }: { title: string; setOpen: (v: boolean) 
         </button>
         <div className="hidden md:flex items-center gap-2 text-sm" style={{ color: "var(--foreground)" }}>
           <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white"
-            style={{ background: "var(--accent)" }}>AD</div>
-          <span className="text-xs">Admin</span>
+            style={{ background: "var(--accent)" }}>{initials}</div>
+          <span className="text-xs">{roleLabel}</span>
         </div>
       </div>
     </header>
@@ -622,6 +634,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/admin/patient-profile": "Patient Profile",
   "/admin/doctors": "Doctors",
   "/admin/services": "Services",
+  "/admin/users": "Users & Access",
   "/admin/surveys": "Surveys",
   "/admin/rewards": "Rewards",
   "/admin/media": "Media Center",
