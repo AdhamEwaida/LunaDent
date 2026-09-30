@@ -8,10 +8,12 @@ type AuthState = {
   role: AppRole | null;
   loading: boolean;
   accountActive: boolean;
+  mustChangePassword: boolean;
   demoMode: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, fullName?: string) => Promise<{ needsEmailConfirmation: boolean }>;
   claimInitialAdmin: (code: string) => Promise<void>;
+  changePassword: (newPassword: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -91,6 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     role,
     loading,
     accountActive,
+    mustChangePassword: Boolean(user?.app_metadata?.must_change_password),
     demoMode: !isSupabaseConfigured,
     signIn: async (email, password) => {
       if (!supabase) {
@@ -126,6 +129,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAccountActive(profile?.active !== false);
         setRole((profile?.role as AppRole | undefined) ?? "patient");
       }
+    },
+    changePassword: async (newPassword) => {
+      if (!supabase) return;
+      if (newPassword.length < 8) throw new Error("Password must be at least 8 characters.");
+      const { data, error } = await supabase.functions.invoke("manage-clinic-users", {
+        body: { action: "change_password", new_password: newPassword },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(String(data.error));
+      const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError) throw refreshError;
+      if (refreshed.user) setUser(refreshed.user);
     },
     signOut: async () => {
       if (!supabase) return;
