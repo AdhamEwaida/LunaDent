@@ -1,10 +1,25 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Calendar, Clock, MapPin, Star, CheckCircle2, ArrowRight, Sparkles, ChevronRight } from "lucide-react";
+import { Calendar, Clock, MapPin, Star, CheckCircle2, ArrowRight, Sparkles, ChevronLeft, ChevronRight } from "lucide-react";
 import { TREATMENTS, DOCTORS, BRAND } from "@/lib/data";
 import { FadeIn, StaggerGroup, StaggerItem, HoverCard, ScaleIn } from "@/components/Motion";
 import { clinicRepository } from "@/clinic/repository";
+
+function toISODate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatBookingDate(value: string) {
+  if (!value) return "";
+  const date = new Date(`${value}T12:00:00`);
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+}
 
 export default function Booking() {
   const [step, setStep] = useState(1);
@@ -13,6 +28,18 @@ export default function Booking() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
+
+  const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const maxMonthStart = new Date(today.getFullYear(), today.getMonth() + 2, 1);
+  const daysInMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0).getDate();
+  const leadingBlankDays = (new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1).getDay() + 6) % 7;
+  const calendarDays = Array.from({ length: daysInMonth }, (_, index) => index + 1);
+  const monthLabel = calendarMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  const canGoPreviousMonth = calendarMonth.getTime() > currentMonthStart.getTime();
+  const canGoNextMonth = calendarMonth.getTime() < maxMonthStart.getTime();
 
   const times = ["9:00 AM","9:30 AM","10:00 AM","10:30 AM","11:00 AM","11:30 AM","1:00 PM","1:30 PM","2:00 PM","3:00 PM","3:30 PM","4:00 PM"];
 
@@ -155,35 +182,69 @@ export default function Booking() {
             {/* Step 3 — Date & Time */}
             {step === 3 && (
               <div>
-                <h2 className="text-lg font-semibold mb-4" style={{ color: "var(--foreground)" }}>Select Date & Time</h2>
+                <h2 className="text-lg font-semibold mb-4" style={{ color: "var(--foreground)" }}>Select Preferred Date & Time</h2>
                 <div className="rounded-2xl border p-5 mb-4" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-                  <h3 className="font-medium text-sm mb-3" style={{ color: "var(--muted-foreground)" }}>April 2026</h3>
+                  <div className="flex items-center justify-between mb-3">
+                    <button
+                      type="button"
+                      aria-label="Previous month"
+                      disabled={!canGoPreviousMonth}
+                      onClick={() => canGoPreviousMonth && setCalendarMonth((month) => new Date(month.getFullYear(), month.getMonth() - 1, 1))}
+                      className="w-9 h-9 rounded-xl border grid place-items-center disabled:opacity-30"
+                      style={{ borderColor: "var(--border)", color: "var(--foreground)" }}>
+                      <ChevronLeft size={16} />
+                    </button>
+                    <h3 className="font-medium text-sm" style={{ color: "var(--foreground)" }}>{monthLabel}</h3>
+                    <button
+                      type="button"
+                      aria-label="Next month"
+                      disabled={!canGoNextMonth}
+                      onClick={() => canGoNextMonth && setCalendarMonth((month) => new Date(month.getFullYear(), month.getMonth() + 1, 1))}
+                      className="w-9 h-9 rounded-xl border grid place-items-center disabled:opacity-30"
+                      style={{ borderColor: "var(--border)", color: "var(--foreground)" }}>
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+
                   <div className="grid grid-cols-7 gap-1 mb-4">
                     {["Mo","Tu","We","Th","Fr","Sa","Su"].map(d => (
                       <div key={d} className="text-center text-xs py-1 font-medium" style={{ color: "var(--muted-foreground)" }}>{d}</div>
                     ))}
-                    {Array.from({length: 30}, (_, i) => i + 1).map(d => {
-                      const isToday = d === 16;
-                      const isPast = d < 16;
+                    {Array.from({ length: leadingBlankDays }, (_, index) => <div key={`blank-${index}`} />)}
+                    {calendarDays.map(day => {
+                      const candidate = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), day);
+                      candidate.setHours(0, 0, 0, 0);
+                      const dateValue = toISODate(candidate);
+                      const isPast = candidate.getTime() < today.getTime();
+                      const isToday = candidate.getTime() === today.getTime();
+                      const isSelected = selected.date === dateValue;
                       return (
-                        <button key={d} onClick={() => !isPast && setSelected(s => ({...s, date: `Apr ${d}`}))}
+                        <button
+                          key={dateValue}
+                          type="button"
+                          onClick={() => !isPast && setSelected(current => ({ ...current, date: dateValue, time: "" }))}
                           disabled={isPast}
                           className="aspect-square rounded-xl text-xs flex items-center justify-center transition-all"
                           style={{
-                            background: selected.date === `Apr ${d}` ? "var(--primary)" : isToday ? "var(--secondary)" : "transparent",
-                            color: selected.date === `Apr ${d}` ? "white" : isPast ? "var(--muted-foreground)" : "var(--foreground)",
-                            opacity: isPast ? 0.35 : 1,
-                            fontWeight: isToday ? 600 : 400,
-                          }}>{d}</button>
+                            background: isSelected ? "var(--primary)" : isToday ? "var(--secondary)" : "transparent",
+                            color: isSelected ? "white" : isPast ? "var(--muted-foreground)" : "var(--foreground)",
+                            opacity: isPast ? 0.3 : 1,
+                            fontWeight: isToday ? 700 : 400,
+                          }}>
+                          {day}
+                        </button>
                       );
                     })}
                   </div>
+
                   {selected.date && (
                     <div>
-                      <h3 className="font-medium text-sm mb-3" style={{ color: "var(--muted-foreground)" }}>Available times for {selected.date}</h3>
-                      <div className="grid grid-cols-4 gap-2">
+                      <h3 className="font-medium text-sm mb-3" style={{ color: "var(--muted-foreground)" }}>
+                        Preferred times for {formatBookingDate(selected.date)}
+                      </h3>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                         {times.map(t => (
-                          <button key={t} onClick={() => setSelected(s => ({...s, time: t}))}
+                          <button key={t} type="button" onClick={() => setSelected(s => ({...s, time: t}))}
                             className="py-2 rounded-xl text-xs font-medium transition-all border"
                             style={{
                               background: selected.time === t ? "var(--primary)" : "var(--muted)",
@@ -192,6 +253,9 @@ export default function Booking() {
                             }}>{t}</button>
                         ))}
                       </div>
+                      <p className="text-xs mt-3" style={{ color: "var(--muted-foreground)" }}>
+                        This is a booking request. The clinic will confirm the final appointment time.
+                      </p>
                     </div>
                   )}
                 </div>
@@ -260,21 +324,21 @@ export default function Booking() {
             {/* Step 5 — Confirm */}
             {step === 5 && (
               <div>
-                <h2 className="text-lg font-semibold mb-4" style={{ color: "var(--foreground)" }}>Confirm Appointment</h2>
+                <h2 className="text-lg font-semibold mb-4" style={{ color: "var(--foreground)" }}>Review Booking Request</h2>
                 <div className="rounded-2xl border p-5 mb-6" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
                   <div className="flex items-center gap-3 p-4 rounded-xl mb-4"
                     style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))", color: "white" }}>
                     <Sparkles size={18} />
                     <div>
-                      <div className="font-semibold text-sm">Your LunaDent Appointment</div>
-                      <div className="text-xs opacity-80">Summary below — confirm via WhatsApp</div>
+                      <div className="font-semibold text-sm">Your LunaDent Booking Request</div>
+                      <div className="text-xs opacity-80">Summary below — save the request before WhatsApp opens</div>
                     </div>
                   </div>
                   <div className="space-y-3 text-sm">
                     {[
                       ["Treatment", selected.treatment >= 0 ? TREATMENTS[selected.treatment]?.name : "Not selected"],
                       ["Doctor", selected.doctor === 99 ? "No preference" : selected.doctor >= 0 ? DOCTORS[selected.doctor]?.name : "Not selected"],
-                      ["Date", selected.date || "Not selected"],
+                      ["Date", selected.date ? formatBookingDate(selected.date) : "Not selected"],
                       ["Time", selected.time || "Not selected"],
                       ["Patient", `${details.firstName} ${details.lastName}`.trim() || "Not provided"],
                       ["Location", "88 Crescent Ave, Beverly Hills"],
