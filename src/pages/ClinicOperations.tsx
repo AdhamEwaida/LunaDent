@@ -403,7 +403,8 @@ export function ClinicServices() {
 }
 
 export function ClinicUsers() {
-  type StaffRole = "admin" | "dentist" | "receptionist" | "accountant";
+  type ManageableStaffRole = "dentist" | "receptionist" | "accountant";
+  type StaffRole = "admin" | ManageableStaffRole;
   type StaffUser = {
     id: string;
     email?: string;
@@ -423,7 +424,7 @@ export function ClinicUsers() {
     full_name: "",
     email: "",
     password: "",
-    role: "receptionist" as StaffRole,
+    role: "receptionist" as ManageableStaffRole,
     specialty: "",
     license_number: "",
   });
@@ -461,7 +462,7 @@ export function ClinicUsers() {
     }
   };
 
-  const update = async (item: StaffUser, role: StaffRole, active: boolean) => {
+  const update = async (item: StaffUser, role: ManageableStaffRole, active: boolean) => {
     setError("");
     try {
       await clinicRepository.updateClinicUser({ user_id: item.id, role, active });
@@ -478,7 +479,7 @@ export function ClinicUsers() {
           Users & Access
         </h2>
         <p className="text-xs" style={muted}>
-          Create staff accounts, assign roles, and disable access. New staff must change their temporary password on first login.
+          Create Dentist, Receptionist, and Accountant accounts. The owner Admin account is permanent and cannot be reassigned. New staff must change their temporary password on first login.
         </p>
       </div>
       <button onClick={() => setShow(!show)} className="px-3 py-2 rounded-xl text-sm font-semibold"
@@ -503,12 +504,11 @@ export function ClinicUsers() {
           className="mt-1.5 w-full px-3 py-2.5 rounded-xl border bg-transparent" />
       </label>
       <label className="text-xs font-semibold">Role
-        <select value={form.role} onChange={(e)=>setForm({...form,role:e.target.value as StaffRole})}
+        <select value={form.role} onChange={(e)=>setForm({...form,role:e.target.value as ManageableStaffRole})}
           className="mt-1.5 w-full px-3 py-2.5 rounded-xl border bg-transparent">
           <option value="dentist">Dentist</option>
           <option value="receptionist">Receptionist</option>
           <option value="accountant">Accountant</option>
-          <option value="admin">Admin</option>
         </select>
       </label>
 
@@ -552,13 +552,19 @@ export function ClinicUsers() {
                 <div className="text-xs" style={muted}>{item.email}</div>
               </td>
               <td className="px-4 py-3">
-                <select value={item.role} onChange={(e)=>void update(item,e.target.value as StaffRole,item.active)}
-                  className="px-2 py-1.5 rounded-lg border bg-transparent text-xs">
-                  <option value="admin">Admin</option>
-                  <option value="dentist">Dentist</option>
-                  <option value="receptionist">Receptionist</option>
-                  <option value="accountant">Accountant</option>
-                </select>
+                {item.role === "admin" ? (
+                  <div>
+                    <div className="text-xs font-semibold" style={{ color: "var(--primary)" }}>Owner Admin</div>
+                    <div className="text-[11px]" style={muted}>Permanent clinic owner</div>
+                  </div>
+                ) : (
+                  <select value={item.role} onChange={(e)=>void update(item,e.target.value as ManageableStaffRole,item.active)}
+                    className="px-2 py-1.5 rounded-lg border bg-transparent text-xs">
+                    <option value="dentist">Dentist</option>
+                    <option value="receptionist">Receptionist</option>
+                    <option value="accountant">Accountant</option>
+                  </select>
+                )}
               </td>
               <td className="px-4 py-3">
                 <StatusBadge tone={item.email_confirmed_at ? "success" : "warning"}>
@@ -574,9 +580,13 @@ export function ClinicUsers() {
                 {item.last_sign_in_at ? new Date(item.last_sign_in_at).toLocaleString() : "Never"}
               </td>
               <td className="px-4 py-3">
-                <button onClick={()=>void update(item,item.role,!item.active)}>
-                  <StatusBadge tone={item.active ? "success" : "danger"}>{item.active ? "Active" : "Disabled"}</StatusBadge>
-                </button>
+                {item.role === "admin" ? (
+                  <StatusBadge tone="success">Owner · Locked</StatusBadge>
+                ) : (
+                  <button onClick={()=>void update(item,item.role as ManageableStaffRole,!item.active)}>
+                    <StatusBadge tone={item.active ? "success" : "danger"}>{item.active ? "Active" : "Disabled"}</StatusBadge>
+                  </button>
+                )}
               </td>
             </tr>)}
           </tbody>

@@ -11,8 +11,7 @@ type AuthState = {
   mustChangePassword: boolean;
   demoMode: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, fullName?: string) => Promise<{ needsEmailConfirmation: boolean }>;
-  claimInitialAdmin: (code: string) => Promise<void>;
+  signUpPatient: (input: { email: string; password: string; firstName: string; lastName: string; phone?: string }) => Promise<{ needsEmailConfirmation: boolean }>;
   changePassword: (newPassword: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -104,31 +103,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
     },
-    signUp: async (email, password, fullName) => {
+    signUpPatient: async ({ email, password, firstName, lastName, phone }) => {
       if (!supabase) return { needsEmailConfirmation: false };
+      const normalizedEmail = email.trim().toLowerCase();
+      const first = firstName.trim();
+      const last = lastName.trim();
+      if (!first || !last) throw new Error("First and last name are required.");
+      if (password.length < 8) throw new Error("Password must be at least 8 characters.");
+
       const { data, error } = await supabase.auth.signUp({
-        email,
+        email: normalizedEmail,
         password,
         options: {
-          data: { full_name: fullName || email },
-          emailRedirectTo: `${import.meta.env.VITE_SITE_URL || window.location.origin}/staff/login`,
+          data: {
+            full_name: `${first} ${last}`.trim(),
+            first_name: first,
+            last_name: last,
+            phone: phone?.trim() || null,
+          },
+          emailRedirectTo: `${window.location.origin}/patient-portal/complete-profile`,
         },
       });
       if (error) throw error;
       return { needsEmailConfirmation: !data.session };
-    },
-    claimInitialAdmin: async (code) => {
-      if (!supabase) { setRole("admin"); return; }
-      const { data, error } = await supabase.functions.invoke("claim-initial-admin", { body: { code } });
-      if (error) throw error;
-      if (data?.error) throw new Error(String(data.error));
-      const { data: { user: refreshedUser } } = await supabase.auth.getUser();
-      if (refreshedUser) {
-        setUser(refreshedUser);
-        const { data: profile } = await supabase.from("profiles").select("role,active").eq("id", refreshedUser.id).maybeSingle();
-        setAccountActive(profile?.active !== false);
-        setRole((profile?.role as AppRole | undefined) ?? "patient");
-      }
     },
     changePassword: async (newPassword) => {
       if (!supabase) return;

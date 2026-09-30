@@ -9,7 +9,7 @@ const cardStyle = { background: "var(--card)", borderColor: "var(--border)" };
 const muted = { color: "var(--muted-foreground)" };
 
 function PatientLogin() {
-  const { user, role, signIn } = useAuth();
+  const { user, role, signIn, signOut } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -20,14 +20,91 @@ function PatientLogin() {
     if (user && role === "patient") navigate("/patient-portal", { replace: true });
   }, [user, role, navigate]);
 
+  if (user && role && role !== "patient") {
+    return (
+      <div className="min-h-screen grid place-items-center px-4" style={{ background: "var(--background)" }}>
+        <div className="w-full max-w-md rounded-3xl border p-7 text-center" style={cardStyle}>
+          <ShieldCheck size={34} className="mx-auto mb-3" />
+          <h1 className="text-2xl font-bold" style={{ color: "var(--primary)", fontFamily: "'Cormorant Garamond', serif" }}>
+            You are signed in as clinic staff
+          </h1>
+          <p className="text-sm mt-2 mb-6" style={muted}>
+            The Patient Portal is for patient accounts only.
+          </p>
+          <Link to="/admin" className="block w-full py-3 rounded-xl text-sm font-semibold"
+            style={{ background: "var(--primary)", color: "white" }}>
+            Open Staff Workspace
+          </Link>
+          <button type="button" onClick={() => void signOut()} className="w-full mt-3 py-2 text-sm underline" style={muted}>
+            Sign out and use a patient account
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const submit = async (event: FormEvent) => {
-    event.preventDefault(); setLoading(true); setError("");
-    try { await signIn(email, password); }
-    catch (err) { setError(err instanceof Error ? err.message : "Unable to sign in."); }
-    finally { setLoading(false); }
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      await signIn(email.trim(), password);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to sign in.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  return <div className="min-h-screen grid place-items-center px-4" style={{ background: "var(--background)" }}><form onSubmit={submit} className="w-full max-w-md rounded-3xl border p-7" style={cardStyle}><div className="w-12 h-12 rounded-2xl grid place-items-center text-white mb-4" style={{ background: "var(--primary)" }}><ShieldCheck size={22} /></div><h1 className="text-2xl font-bold" style={{ color: "var(--primary)", fontFamily: "'Cormorant Garamond', serif" }}>Patient Portal</h1><p className="text-sm mt-1 mb-6" style={muted}>Access your appointments, treatment plans, invoices, payments and documents.</p>{error && <div className="mb-4 px-3 py-2 rounded-xl bg-red-50 text-red-700 text-sm">{error}</div>}<label className="text-xs font-semibold">Email<input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1.5 mb-4 w-full px-3 py-3 rounded-xl border bg-transparent text-sm" /></label><label className="text-xs font-semibold">Password<input required type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5 mb-5 w-full px-3 py-3 rounded-xl border bg-transparent text-sm" /></label><button disabled={loading} className="w-full py-3 rounded-xl text-sm font-semibold" style={{ background: "var(--primary)", color: "white" }}>{loading ? "Signing in..." : "Sign In"}</button><Link to="/" className="block text-center text-xs mt-4" style={{ color: "var(--accent)" }}>Back to LunaDent</Link></form></div>;
+  return (
+    <div className="min-h-screen grid place-items-center px-4 py-10" style={{ background: "var(--background)" }}>
+      <div className="w-full max-w-md">
+        <div className="mb-5 text-center">
+          <div className="w-14 h-14 rounded-2xl grid place-items-center text-white mx-auto mb-4"
+            style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>
+            <UserRound size={24} />
+          </div>
+          <h1 className="text-3xl font-bold" style={{ color: "var(--primary)", fontFamily: "'Cormorant Garamond', serif" }}>
+            Patient Sign In
+          </h1>
+          <p className="text-sm mt-2" style={muted}>
+            Access your appointments, treatment plans, invoices, payments and documents.
+          </p>
+        </div>
+
+        <form onSubmit={submit} className="rounded-3xl border p-7 shadow-sm" style={cardStyle}>
+          {error && <div className="mb-4 px-3 py-2 rounded-xl bg-red-50 text-red-700 text-sm">{error}</div>}
+
+          <label className="text-xs font-semibold">Email
+            <input required type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)}
+              className="mt-1.5 mb-4 w-full px-3 py-3 rounded-xl border bg-transparent text-sm" />
+          </label>
+
+          <label className="text-xs font-semibold">Password
+            <input required type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)}
+              className="mt-1.5 mb-5 w-full px-3 py-3 rounded-xl border bg-transparent text-sm" />
+          </label>
+
+          <button disabled={loading} className="w-full py-3 rounded-xl text-sm font-semibold"
+            style={{ background: "var(--primary)", color: "white" }}>
+            {loading ? "Signing in..." : "Sign In to Patient Portal"}
+          </button>
+
+          <div className="mt-5 pt-5 border-t text-center" style={{ borderColor: "var(--border)" }}>
+            <p className="text-xs mb-2" style={muted}>New to LunaDent?</p>
+            <Link to="/patient-portal/signup" className="text-sm font-semibold" style={{ color: "var(--accent)" }}>
+              Create Patient Account
+            </Link>
+          </div>
+        </form>
+
+        <div className="flex justify-center gap-4 mt-4 text-xs">
+          <Link to="/staff/login" style={{ color: "var(--muted-foreground)" }}>Staff Sign In</Link>
+          <Link to="/" style={{ color: "var(--muted-foreground)" }}>Back to Website</Link>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 const nav = [
@@ -83,7 +160,16 @@ export default function PatientPortalLive() {
 
   if (authLoading || loading) return <div className="min-h-screen grid place-items-center" style={{ background: "var(--background)", color: "var(--muted-foreground)" }}>Loading patient portal...</div>;
   if (role !== "patient") return <div className="min-h-screen grid place-items-center px-4" style={{ background: "var(--background)" }}><div className="max-w-md text-center"><ShieldCheck size={34} className="mx-auto mb-3" /><h1 className="text-xl font-bold">Patient account required</h1><p className="text-sm mt-2" style={muted}>This portal is restricted to patient accounts.</p><Link to="/admin" className="inline-block mt-5 px-4 py-2 rounded-xl text-sm" style={{ background: "var(--primary)", color: "white" }}>Open staff workspace</Link></div></div>;
-  if (!patient) return <div className="min-h-screen grid place-items-center px-4" style={{ background: "var(--background)" }}><div className="max-w-lg text-center"><UserRound size={34} className="mx-auto mb-3" /><h1 className="text-xl font-bold">Patient record not linked</h1><p className="text-sm mt-2" style={muted}>Your Auth account exists, but it is not linked to a patient record yet. Reception needs to set the patient record's auth_user_id.</p></div></div>;
+  if (!patient) return <div className="min-h-screen grid place-items-center px-4" style={{ background: "var(--background)" }}>
+    <div className="max-w-lg text-center rounded-3xl border p-7" style={cardStyle}>
+      <UserRound size={34} className="mx-auto mb-3" />
+      <h1 className="text-xl font-bold">Finish your patient profile</h1>
+      <p className="text-sm mt-2" style={muted}>Your account is confirmed, but your LunaDent patient profile is not complete yet.</p>
+      <Link to="/patient-portal/complete-profile" className="inline-block mt-5 px-5 py-3 rounded-xl text-sm font-semibold" style={{ background:"var(--primary)", color:"white" }}>
+        Complete Patient Profile
+      </Link>
+    </div>
+  </div>;
 
   const content = () => {
     if (location.pathname === "/patient-portal/appointments") return <section><h2 className="text-xl font-bold mb-4">Appointments</h2><div className="space-y-3">{appointments.length ? appointments.map((appointment) => <div key={appointment.id} className="rounded-2xl border p-4 flex items-center gap-4" style={cardStyle}><div className="w-11 h-11 rounded-xl grid place-items-center" style={{ background: "var(--secondary)", color: "var(--primary)" }}><CalendarDays size={18} /></div><div className="flex-1"><div className="font-semibold text-sm">{appointment.treatment?.name_en || "Dental appointment"}</div><div className="text-xs" style={muted}>{new Date(appointment.start_at).toLocaleString()} · {appointment.doctor?.display_name || "Doctor to be assigned"}</div></div><span className="text-xs font-semibold px-2 py-1 rounded-full" style={{ background: "var(--secondary)", color: "var(--primary)" }}>{appointment.status.replaceAll("_", " ")}</span></div>) : <div className="rounded-2xl border p-8 text-center text-sm" style={{ ...cardStyle, ...muted }}>No appointments found.</div>}</div></section>;

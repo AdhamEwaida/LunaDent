@@ -85,6 +85,34 @@ export const clinicRepository = {
     return query.trim() ? patients.filter((patient) => normalizePatientSearch(patient, query)) : patients;
   },
 
+  async createMyPatientProfile(input: {
+    first_name: string;
+    last_name: string;
+    phone?: string;
+    email?: string;
+    date_of_birth?: string;
+    sex?: "male" | "female" | "other" | "";
+    address?: string;
+  }): Promise<string> {
+    if (!supabase) {
+      const created = await this.createPatient(input);
+      return created.id;
+    }
+
+    const { data, error } = await supabase.rpc("create_my_patient_profile", {
+      p_first_name: input.first_name.trim(),
+      p_last_name: input.last_name.trim(),
+      p_phone: input.phone?.trim() || null,
+      p_email: input.email?.trim().toLowerCase() || null,
+      p_date_of_birth: input.date_of_birth || null,
+      p_sex: input.sex || null,
+      p_address: input.address?.trim() || null,
+    });
+
+    if (error) throw error;
+    return String(data);
+  },
+
   async getPatientByAuthUserId(authUserId: string): Promise<Patient | null> {
     if (supabase) {
       const { data, error } = await supabase.from("patients").select("*").eq("auth_user_id", authUserId).maybeSingle();
@@ -547,14 +575,14 @@ export const clinicRepository = {
     return data?.users ?? [];
   },
 
-  async createClinicUser(input: { email: string; password: string; full_name: string; role: "admin" | "dentist" | "receptionist" | "accountant"; specialty?: string; license_number?: string }): Promise<void> {
+  async createClinicUser(input: { email: string; password: string; full_name: string; role: "dentist" | "receptionist" | "accountant"; specialty?: string; license_number?: string }): Promise<void> {
     if (!supabase) throw new Error("Live database is required for user management.");
     const { data, error } = await supabase.functions.invoke("manage-clinic-users", { body: { action: "create", ...input } });
     if (error) throw error;
     if (data?.error) throw new Error(String(data.error));
   },
 
-  async updateClinicUser(input: { user_id: string; role: "admin" | "dentist" | "receptionist" | "accountant"; active: boolean }): Promise<void> {
+  async updateClinicUser(input: { user_id: string; role: "dentist" | "receptionist" | "accountant"; active: boolean }): Promise<void> {
     if (!supabase) throw new Error("Live database is required for user management.");
     const { data, error } = await supabase.functions.invoke("manage-clinic-users", { body: { action: "update", ...input } });
     if (error) throw error;
