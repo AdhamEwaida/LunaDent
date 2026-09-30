@@ -17,6 +17,7 @@ export type Clinic = {
   currency: string;
   timezone: string;
   locale: string;
+  onboarding_completed: boolean;
   logo_path?: string | null;
   created_at: string;
   updated_at: string;
