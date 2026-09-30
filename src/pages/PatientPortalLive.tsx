@@ -91,11 +91,9 @@ function PatientLogin() {
           </button>
 
           <div className="mt-5 pt-5 border-t text-center" style={{ borderColor: "var(--border)" }}>
-            <p className="text-xs leading-relaxed" style={muted}>
-              There is no public patient sign-up. Portal access is activated by the clinic and linked to your patient record.
-            </p>
-            <Link to="/booking" className="inline-block mt-3 text-sm font-semibold" style={{ color: "var(--accent)" }}>
-              Need access? Request an appointment
+            <p className="text-xs mb-2" style={muted}>New to LunaDent?</p>
+            <Link to="/patient-portal/signup" className="text-sm font-semibold" style={{ color: "var(--accent)" }}>
+              Create Patient Account
             </Link>
           </div>
         </form>
@@ -162,7 +160,16 @@ export default function PatientPortalLive() {
 
   if (authLoading || loading) return <div className="min-h-screen grid place-items-center" style={{ background: "var(--background)", color: "var(--muted-foreground)" }}>Loading patient portal...</div>;
   if (role !== "patient") return <div className="min-h-screen grid place-items-center px-4" style={{ background: "var(--background)" }}><div className="max-w-md text-center"><ShieldCheck size={34} className="mx-auto mb-3" /><h1 className="text-xl font-bold">Patient account required</h1><p className="text-sm mt-2" style={muted}>This portal is restricted to patient accounts.</p><Link to="/admin" className="inline-block mt-5 px-4 py-2 rounded-xl text-sm" style={{ background: "var(--primary)", color: "white" }}>Open staff workspace</Link></div></div>;
-  if (!patient) return <div className="min-h-screen grid place-items-center px-4" style={{ background: "var(--background)" }}><div className="max-w-lg text-center"><UserRound size={34} className="mx-auto mb-3" /><h1 className="text-xl font-bold">Patient record not linked</h1><p className="text-sm mt-2" style={muted}>Your Auth account exists, but it is not linked to a patient record yet. Reception needs to set the patient record's auth_user_id.</p></div></div>;
+  if (!patient) return <div className="min-h-screen grid place-items-center px-4" style={{ background: "var(--background)" }}>
+    <div className="max-w-lg text-center rounded-3xl border p-7" style={cardStyle}>
+      <UserRound size={34} className="mx-auto mb-3" />
+      <h1 className="text-xl font-bold">Finish your patient profile</h1>
+      <p className="text-sm mt-2" style={muted}>Your account is confirmed, but your LunaDent patient profile is not complete yet.</p>
+      <Link to="/patient-portal/complete-profile" className="inline-block mt-5 px-5 py-3 rounded-xl text-sm font-semibold" style={{ background:"var(--primary)", color:"white" }}>
+        Complete Patient Profile
+      </Link>
+    </div>
+  </div>;
 
   const content = () => {
     if (location.pathname === "/patient-portal/appointments") return <section><h2 className="text-xl font-bold mb-4">Appointments</h2><div className="space-y-3">{appointments.length ? appointments.map((appointment) => <div key={appointment.id} className="rounded-2xl border p-4 flex items-center gap-4" style={cardStyle}><div className="w-11 h-11 rounded-xl grid place-items-center" style={{ background: "var(--secondary)", color: "var(--primary)" }}><CalendarDays size={18} /></div><div className="flex-1"><div className="font-semibold text-sm">{appointment.treatment?.name_en || "Dental appointment"}</div><div className="text-xs" style={muted}>{new Date(appointment.start_at).toLocaleString()} · {appointment.doctor?.display_name || "Doctor to be assigned"}</div></div><span className="text-xs font-semibold px-2 py-1 rounded-full" style={{ background: "var(--secondary)", color: "var(--primary)" }}>{appointment.status.replaceAll("_", " ")}</span></div>) : <div className="rounded-2xl border p-8 text-center text-sm" style={{ ...cardStyle, ...muted }}>No appointments found.</div>}</div></section>;
