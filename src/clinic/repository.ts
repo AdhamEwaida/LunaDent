@@ -125,6 +125,18 @@ export const clinicRepository = {
     return String(data);
   },
 
+  async listMyPatientRecords(authUserId: string): Promise<Array<Patient & { clinic?: { id: string; name: string; slug: string } | null }>> {
+    if (!supabase) return [];
+    const { data, error } = await supabase
+      .from("patients")
+      .select("*, clinic:clinics(id,name,slug)")
+      .eq("auth_user_id", authUserId)
+      .neq("status", "archived")
+      .order("created_at");
+    if (error) throw error;
+    return (data ?? []) as unknown as Array<Patient & { clinic?: { id: string; name: string; slug: string } | null }>;
+  },
+
   async getPatientByAuthUserId(authUserId: string, clinicId?: string | null): Promise<Patient | null> {
     if (supabase) {
       let request = supabase.from("patients").select("*").eq("auth_user_id", authUserId);
@@ -241,9 +253,9 @@ export const clinicRepository = {
     saveLocal("patients", patients.map((patient) => patient.id === patientId ? { ...patient, ...patch, updated_at: new Date().toISOString() } : patient));
   },
 
-  async listAppointments(patientId?: string): Promise<Appointment[]> {
+  async listAppointments(patientId?: string, clinicIdOverride?: string | null): Promise<Appointment[]> {
     if (supabase) {
-      const clinicId = currentClinicId();
+      const clinicId = currentClinicId(clinicIdOverride);
       let request = supabase
         .from("appointments")
         .select("*, patient:patients(id,patient_no,first_name,last_name), doctor:doctors(id,display_name), treatment:treatments(id,name_en,name_ar)")
@@ -320,9 +332,9 @@ export const clinicRepository = {
     return created;
   },
 
-  async listTreatmentPlans(patientId?: string): Promise<TreatmentPlan[]> {
+  async listTreatmentPlans(patientId?: string, clinicIdOverride?: string | null): Promise<TreatmentPlan[]> {
     if (supabase) {
-      let request = supabase.from("treatment_plans").select("*, patient:patients(id,patient_no,first_name,last_name)").eq("clinic_id", currentClinicId()).order("created_at", { ascending: false });
+      let request = supabase.from("treatment_plans").select("*, patient:patients(id,patient_no,first_name,last_name)").eq("clinic_id", currentClinicId(clinicIdOverride)).order("created_at", { ascending: false });
       if (patientId) request = request.eq("patient_id", patientId);
       const { data, error } = await request;
       if (error) throw error;
@@ -385,9 +397,9 @@ export const clinicRepository = {
     return created;
   },
 
-  async listInvoices(patientId?: string): Promise<Invoice[]> {
+  async listInvoices(patientId?: string, clinicIdOverride?: string | null): Promise<Invoice[]> {
     if (supabase) {
-      let request = supabase.from("invoices").select("*, patient:patients(id,patient_no,first_name,last_name)").eq("clinic_id", currentClinicId()).order("created_at", { ascending: false });
+      let request = supabase.from("invoices").select("*, patient:patients(id,patient_no,first_name,last_name)").eq("clinic_id", currentClinicId(clinicIdOverride)).order("created_at", { ascending: false });
       if (patientId) request = request.eq("patient_id", patientId);
       const { data, error } = await request;
       if (error) throw error;
@@ -437,9 +449,9 @@ export const clinicRepository = {
     return payment.id;
   },
 
-  async listPayments(patientId?: string): Promise<Payment[]> {
+  async listPayments(patientId?: string, clinicIdOverride?: string | null): Promise<Payment[]> {
     if (supabase) {
-      let request = supabase.from("payments").select("*").eq("clinic_id", currentClinicId()).order("paid_at", { ascending: false });
+      let request = supabase.from("payments").select("*").eq("clinic_id", currentClinicId(clinicIdOverride)).order("paid_at", { ascending: false });
       if (patientId) request = request.eq("patient_id", patientId);
       const { data, error } = await request;
       if (error) throw error;
@@ -449,10 +461,10 @@ export const clinicRepository = {
     return patientId ? payments.filter((payment) => payment.patient_id === patientId) : payments;
   },
 
-  async listPatientDocuments(patientId: string): Promise<PatientDocument[]> {
+  async listPatientDocuments(patientId: string, clinicIdOverride?: string | null): Promise<PatientDocument[]> {
     if (supabase) {
       let request = supabase.from("patient_documents").select("*").eq("patient_id", patientId).eq("patient_visible", true);
-      const clinicId = localStorage.getItem(ACTIVE_CLINIC_KEY);
+      const clinicId = clinicIdOverride || localStorage.getItem(ACTIVE_CLINIC_KEY);
       if (clinicId) request = request.eq("clinic_id", clinicId);
       const { data, error } = await request.order("created_at", { ascending: false });
       if (error) throw error;
