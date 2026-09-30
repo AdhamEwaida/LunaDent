@@ -11,6 +11,7 @@ type AuthState = {
   mustChangePassword: boolean;
   demoMode: boolean;
   signIn: (email: string, password: string) => Promise<void>;
+  signUpPatient: (input: { email: string; password: string; firstName: string; lastName: string; phone?: string }) => Promise<{ needsEmailConfirmation: boolean }>;
   changePassword: (newPassword: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -101,6 +102,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
+    },
+    signUpPatient: async ({ email, password, firstName, lastName, phone }) => {
+      if (!supabase) return { needsEmailConfirmation: false };
+      const normalizedEmail = email.trim().toLowerCase();
+      const first = firstName.trim();
+      const last = lastName.trim();
+      if (!first || !last) throw new Error("First and last name are required.");
+      if (password.length < 8) throw new Error("Password must be at least 8 characters.");
+
+      const { data, error } = await supabase.auth.signUp({
+        email: normalizedEmail,
+        password,
+        options: {
+          data: {
+            full_name: `${first} ${last}`.trim(),
+            first_name: first,
+            last_name: last,
+            phone: phone?.trim() || null,
+          },
+          emailRedirectTo: `${window.location.origin}/patient-portal/complete-profile`,
+        },
+      });
+      if (error) throw error;
+      return { needsEmailConfirmation: !data.session };
     },
     changePassword: async (newPassword) => {
       if (!supabase) return;
