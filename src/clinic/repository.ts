@@ -422,22 +422,38 @@ export const clinicRepository = {
 
   async createBookingRequest(input: { full_name: string; email?: string; phone: string; requested_treatment?: string; requested_doctor?: string; preferred_date?: string; preferred_time?: string; notes?: string }): Promise<BookingRequest> {
     if (!input.full_name.trim() || !input.phone.trim()) throw new Error("Name and phone are required.");
+
+    const created: BookingRequest = {
+      id: crypto.randomUUID(),
+      full_name: input.full_name.trim(),
+      email: input.email?.trim() || null,
+      phone: input.phone.trim(),
+      requested_treatment: input.requested_treatment || null,
+      requested_doctor: input.requested_doctor || null,
+      preferred_date: input.preferred_date || null,
+      preferred_time: input.preferred_time || null,
+      notes: input.notes?.trim() || null,
+      status: "new",
+      created_at: new Date().toISOString(),
+    };
+
     if (supabase) {
-      const { data, error } = await supabase.from("booking_requests").insert({
-        full_name: input.full_name.trim(),
-        email: input.email?.trim() || null,
-        phone: input.phone.trim(),
-        requested_treatment: input.requested_treatment || null,
-        requested_doctor: input.requested_doctor || null,
-        preferred_date: input.preferred_date || null,
-        preferred_time: input.preferred_time || null,
-        notes: input.notes?.trim() || null,
-      }).select("id,status,created_at").single();
+      const { error } = await supabase.from("booking_requests").insert({
+        id: created.id,
+        full_name: created.full_name,
+        email: created.email,
+        phone: created.phone,
+        requested_treatment: created.requested_treatment,
+        requested_doctor: created.requested_doctor,
+        preferred_date: created.preferred_date,
+        preferred_time: created.preferred_time,
+        notes: created.notes,
+      });
       if (error) throw error;
-      return data;
+      return created;
     }
+
     const requests = loadLocal<BookingRequest[]>("booking_requests", []);
-    const created: BookingRequest = { id: crypto.randomUUID(), full_name: input.full_name, email: input.email || null, phone: input.phone, requested_treatment: input.requested_treatment || null, requested_doctor: input.requested_doctor || null, preferred_date: input.preferred_date || null, preferred_time: input.preferred_time || null, notes: input.notes || null, status: "new", created_at: new Date().toISOString() };
     saveLocal("booking_requests", [created, ...requests]);
     return created;
   },
