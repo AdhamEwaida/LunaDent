@@ -4,13 +4,18 @@ import { LockKeyhole, Mail, ShieldCheck, Stethoscope } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 
 export default function StaffLogin() {
-  const { user, role, mustChangePassword, signIn, signOut } = useAuth();
+  const { user, role, isSuperAdmin, mustChangePassword, signIn, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  if (user && isSuperAdmin) {
+    if (mustChangePassword) return <Navigate to="/staff/change-password" replace />;
+    return <Navigate to="/super-admin" replace />;
+  }
 
   if (user && role && role !== "patient") {
     if (mustChangePassword) return <Navigate to="/staff/change-password" replace />;
@@ -49,8 +54,7 @@ export default function StaffLogin() {
     setError("");
     try {
       await signIn(email.trim(), password);
-      const destination = (location.state as { from?: string } | null)?.from || "/admin";
-      navigate(destination, { replace: true });
+      // AuthContext resolves platform and clinic roles before this page redirects.
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to sign in.");
     } finally {

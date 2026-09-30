@@ -1,95 +1,152 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import type { AppRole } from "@/clinic/types";
+import type { Clinic, ClinicMembership, ClinicRole, PlatformRole } from "@/saas/types";
 
 type AuthState = {
   user: User | null;
   role: AppRole | null;
+  platformRole: PlatformRole | null;
+  isSuperAdmin: boolean;
+  memberships: ClinicMembership[];
+  activeClinicId: string | null;
+  activeClinic: Clinic | null;
+  activeClinicRole: ClinicRole | null;
   loading: boolean;
   accountActive: boolean;
   mustChangePassword: boolean;
   demoMode: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUpPatient: (input: { email: string; password: string; firstName: string; lastName: string; phone?: string }) => Promise<{ needsEmailConfirmation: boolean }>;
+  signUpPatient: (input: { email: string; password: string; firstName: string; lastName: string; phone?: string; clinicSlug?: string }) => Promise<{ needsEmailConfirmation: boolean }>;
   changePassword: (newPassword: string) => Promise<void>;
   signOut: () => Promise<void>;
+  setActiveClinicId: (clinicId: string) => void;
+  refreshTenantContext: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
+const ACTIVE_CLINIC_KEY = "lunadent_active_clinic_id";
 
 const demoUser = {
-  id: "demo-admin",
+  id: "demo-super-admin",
   email: "admin@lunadent.local",
   app_metadata: {},
-  user_metadata: {},
+  user_metadata: { full_name: "LunaDent Super Admin" },
   aud: "authenticated",
   created_at: new Date(0).toISOString(),
 } as User;
 
+function mapClinicRole(role: ClinicRole | null): AppRole | null {
+  if (!role) return null;
+  if (role === "clinic_owner") return "admin";
+  return role;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(isSupabaseConfigured ? null : demoUser);
   const [role, setRole] = useState<AppRole | null>(isSupabaseConfigured ? null : "admin");
+  const [platformRole, setPlatformRole] = useState<PlatformRole | null>(isSupabaseConfigured ? null : "super_admin");
+  const [memberships, setMemberships] = useState<ClinicMembership[]>([]);
+  const [activeClinicIdState, setActiveClinicIdState] = useState<string | null>(null);
   const [loading, setLoading] = useState(isSupabaseConfigured);
   const [accountActive, setAccountActive] = useState(!isSupabaseConfigured);
 
+  const loadContext = useCallback(async (nextUser: User | null) => {
+    setUser(nextUser);
+    if (!nextUser) {
+      setRole(null);
+      setPlatformRole(null);
+      setMemberships([]);
+      setActiveClinicIdState(null);
+      setAccountActive(false);
+      setLoading(false);
+      return;
+    }
+
+    if (!supabase) {
+      setPlatformRole("super_admin");
+      setRole("admin");
+      setAccountActive(true);
+      setLoading(false);
+      return;
+    }
+
+    const [{ data: profile, error: profileError }, { data: membershipRows, error: membershipError }] = await Promise.all([
+      supabase.from("profiles").select("platform_role,active").eq("id", nextUser.id).maybeSingle(),
+      supabase
+        .from("clinic_memberships")
+        .select("id,clinic_id,user_id,role,active,clinic:clinics(*)")
+        .eq("user_id", nextUser.id)
+        .eq("active", true)
+        .order("created_at"),
+    ]);
+
+    if (profileError || membershipError || profile?.active === false) {
+      await supabase.auth.signOut();
+      setUser(null);
+      setRole(null);
+      setPlatformRole(null);
+      setMemberships([]);
+      setActiveClinicIdState(null);
+      setAccountActive(false);
+      setLoading(false);
+      return;
+    }
+
+    const nextMemberships = (membershipRows ?? []) as unknown as ClinicMembership[];
+    const storedClinicId = localStorage.getItem(ACTIVE_CLINIC_KEY);
+    const chosen = nextMemberships.find((membership) => membership.clinic_id === storedClinicId) ?? nextMemberships[0] ?? null;
+
+    setPlatformRole((profile?.platform_role as PlatformRole | undefined) ?? "user");
+    setMemberships(nextMemberships);
+    setActiveClinicIdState(chosen?.clinic_id ?? null);
+    setRole(chosen ? mapClinicRole(chosen.role) : "patient");
+    setAccountActive(true);
+    setLoading(false);
+
+    if (chosen) localStorage.setItem(ACTIVE_CLINIC_KEY, chosen.clinic_id);
+  }, []);
+
   useEffect(() => {
     if (!supabase) return;
+
     let mounted = true;
-
-    const loadRole = async (nextUser: User | null) => {
+    const load = async (nextUser: User | null) => {
       if (!mounted) return;
-      setUser(nextUser);
-      if (!nextUser) {
-        setRole(null);
-        setAccountActive(false);
-        setLoading(false);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("role,active")
-        .eq("id", nextUser.id)
-        .maybeSingle();
-
-      if (!mounted) return;
-      if (error) {
-        setRole(null);
-        setAccountActive(false);
-        setLoading(false);
-        return;
-      }
-
-      if (data?.active === false) {
-        await supabase.auth.signOut();
-        if (!mounted) return;
-        setUser(null);
-        setRole(null);
-        setAccountActive(false);
-        setLoading(false);
-        return;
-      }
-
-      setAccountActive(true);
-      setRole((data?.role as AppRole | undefined) ?? "patient");
-      setLoading(false);
+      await loadContext(nextUser);
     };
 
-    supabase.auth.getSession().then(({ data }) => loadRole(data.session?.user ?? null));
+    void supabase.auth.getSession().then(({ data }) => load(data.session?.user ?? null));
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      void loadRole(session?.user ?? null);
+      void load(session?.user ?? null);
     });
 
     return () => {
       mounted = false;
       listener.subscription.unsubscribe();
     };
-  }, []);
+  }, [loadContext]);
+
+  const setActiveClinicId = useCallback((clinicId: string) => {
+    const membership = memberships.find((item) => item.clinic_id === clinicId && item.active);
+    if (!membership) return;
+    localStorage.setItem(ACTIVE_CLINIC_KEY, clinicId);
+    setActiveClinicIdState(clinicId);
+    setRole(mapClinicRole(membership.role));
+  }, [memberships]);
+
+  const activeMembership = memberships.find((membership) => membership.clinic_id === activeClinicIdState) ?? null;
 
   const value = useMemo<AuthState>(() => ({
     user,
     role,
+    platformRole,
+    isSuperAdmin: platformRole === "super_admin",
+    memberships,
+    activeClinicId: activeClinicIdState,
+    activeClinic: (activeMembership?.clinic as Clinic | null | undefined) ?? null,
+    activeClinicRole: activeMembership?.role ?? null,
     loading,
     accountActive,
     mustChangePassword: Boolean(user?.app_metadata?.must_change_password),
@@ -97,13 +154,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signIn: async (email, password) => {
       if (!supabase) {
         setUser(demoUser);
+        setPlatformRole("super_admin");
         setRole("admin");
         return;
       }
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
+      setLoading(true);
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        setLoading(false);
+        throw error;
+      }
+      await loadContext(data.user);
     },
-    signUpPatient: async ({ email, password, firstName, lastName, phone }) => {
+    signUpPatient: async ({ email, password, firstName, lastName, phone, clinicSlug }) => {
       if (!supabase) return { needsEmailConfirmation: false };
       const normalizedEmail = email.trim().toLowerCase();
       const first = firstName.trim();
@@ -121,7 +184,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             last_name: last,
             phone: phone?.trim() || null,
           },
-          emailRedirectTo: `${window.location.origin}/patient-portal/complete-profile`,
+          emailRedirectTo: `${window.location.origin}${clinicSlug ? `/c/${clinicSlug}/patient/complete-profile` : "/patient-portal/complete-profile"}`,
         },
       });
       if (error) throw error;
@@ -141,10 +204,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     },
     signOut: async () => {
       if (!supabase) return;
+      localStorage.removeItem(ACTIVE_CLINIC_KEY);
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
     },
-  }), [user, role, loading, accountActive]);
+    setActiveClinicId,
+    refreshTenantContext: async () => {
+      if (!supabase) return;
+      const { data } = await supabase.auth.getSession();
+      await loadContext(data.session?.user ?? null);
+    },
+  }), [
+    user,
+    role,
+    platformRole,
+    memberships,
+    activeClinicIdState,
+    activeMembership,
+    loading,
+    accountActive,
+    setActiveClinicId,
+    loadContext,
+  ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

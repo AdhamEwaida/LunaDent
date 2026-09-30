@@ -7,7 +7,7 @@ const cors = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const MANAGEABLE_ROLES = ["dentist", "receptionist", "accountant"] as const;
+const STAFF_ROLES = ["dentist", "receptionist", "accountant"] as const;
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -23,18 +23,13 @@ Deno.serve(async (req: Request) => {
     const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const token = authHeader.slice(7);
 
-    const userClient = createClient(url, anon, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
+    const userClient = createClient(url, anon, { auth: { persistSession: false, autoRefreshToken: false } });
     const { data: identity, error: identityError } = await userClient.auth.getUser(token);
     if (identityError || !identity.user) {
       return Response.json({ error: "Invalid session." }, { status: 401, headers: cors });
     }
 
-    const admin = createClient(url, service, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-
+    const admin = createClient(url, service, { auth: { persistSession: false, autoRefreshToken: false } });
     const body = await req.json().catch(() => ({}));
     const action = String(body?.action ?? "");
 
@@ -43,7 +38,6 @@ Deno.serve(async (req: Request) => {
       if (newPassword.length < 8) {
         return Response.json({ error: "Password must be at least 8 characters." }, { status: 400, headers: cors });
       }
-
       const nextAppMetadata = { ...(identity.user.app_metadata ?? {}), must_change_password: false };
       const { error } = await admin.auth.admin.updateUserById(identity.user.id, {
         password: newPassword,
@@ -53,37 +47,56 @@ Deno.serve(async (req: Request) => {
       return Response.json({ ok: true }, { headers: cors });
     }
 
-    const { data: caller, error: callerError } = await admin
-      .from("profiles")
-      .select("role,active")
-      .eq("id", identity.user.id)
-      .single();
+    const clinicId = String(body?.clinic_id ?? "");
+    if (!clinicId) {
+      return Response.json({ error: "clinic_id is required." }, { status: 400, headers: cors });
+    }
 
-    if (callerError || !caller?.active || caller.role !== "admin") {
-      return Response.json({ error: "Administrator access required." }, { status: 403, headers: cors });
+    const [{ data: profile }, { data: membership }] = await Promise.all([
+      admin.from("profiles").select("platform_role,active").eq("id", identity.user.id).maybeSingle(),
+      admin.from("clinic_memberships").select("role,active").eq("clinic_id", clinicId).eq("user_id", identity.user.id).maybeSingle(),
+    ]);
+
+    const isSuperAdmin = profile?.active === true && profile?.platform_role === "super_admin";
+    const isOwner = membership?.active === true && membership?.role === "clinic_owner";
+    if (!isSuperAdmin && !isOwner) {
+      return Response.json({ error: "Clinic owner access required." }, { status: 403, headers: cors });
     }
 
     if (action === "list") {
-      const { data: authUsers, error } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      if (error) throw error;
+      const { data: memberships, error: membershipError } = await admin
+        .from("clinic_memberships")
+        .select("user_id,role,active,created_at")
+        .eq("clinic_id", clinicId)
+        .order("created_at");
+      if (membershipError) throw membershipError;
 
       const { data: profiles, error: profileError } = await admin
         .from("profiles")
-        .select("id,role,full_name,phone,active,created_at")
-        .neq("role", "patient");
+        .select("id,full_name,phone");
       if (profileError) throw profileError;
 
+      const { data: authUsers, error: authError } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      if (authError) throw authError;
+
       const profileMap = new Map((profiles ?? []).map((p) => [p.id, p]));
-      const users = authUsers.users
-        .filter((u) => profileMap.has(u.id))
-        .map((u) => ({
-          id: u.id,
-          email: u.email,
-          last_sign_in_at: u.last_sign_in_at,
-          email_confirmed_at: u.email_confirmed_at,
-          must_change_password: Boolean(u.app_metadata?.must_change_password),
-          ...profileMap.get(u.id),
-        }));
+      const authMap = new Map(authUsers.users.map((u) => [u.id, u]));
+
+      const users = (memberships ?? []).map((m) => {
+        const p = profileMap.get(m.user_id);
+        const u = authMap.get(m.user_id);
+        return {
+          id: m.user_id,
+          email: u?.email,
+          full_name: p?.full_name,
+          phone: p?.phone,
+          role: m.role,
+          active: m.active,
+          last_sign_in_at: u?.last_sign_in_at,
+          email_confirmed_at: u?.email_confirmed_at,
+          must_change_password: Boolean(u?.app_metadata?.must_change_password),
+        };
+      });
 
       return Response.json({ users }, { headers: cors });
     }
@@ -96,45 +109,83 @@ Deno.serve(async (req: Request) => {
       const specialty = String(body?.specialty ?? "").trim();
       const licenseNumber = String(body?.license_number ?? "").trim();
 
-      if (!email || password.length < 8 || !MANAGEABLE_ROLES.includes(role as typeof MANAGEABLE_ROLES[number])) {
+      if (!email || password.length < 8 || !STAFF_ROLES.includes(role as typeof STAFF_ROLES[number])) {
         return Response.json(
-          { error: "Valid email, temporary password (8+ chars), and a staff role are required." },
+          { error: "Valid email, temporary password (8+ chars), and staff role are required." },
           { status: 400, headers: cors },
         );
       }
 
-      const { data: created, error } = await admin.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true,
-        user_metadata: { full_name: fullName || email },
-      });
-      if (error || !created.user) throw error ?? new Error("User creation failed.");
+      const { data: listed, error: listError } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      if (listError) throw listError;
+      let targetUser = listed.users.find((u) => u.email?.toLowerCase() === email);
+      let createdNow = false;
 
-      const { error: metadataError } = await admin.auth.admin.updateUserById(created.user.id, {
-        app_metadata: { ...(created.user.app_metadata ?? {}), must_change_password: true },
-      });
-      if (metadataError) throw metadataError;
-
-      const { error: updateError } = await admin
-        .from("profiles")
-        .update({ role, full_name: fullName || email, active: true })
-        .eq("id", created.user.id);
-      if (updateError) throw updateError;
-
-      if (role === "dentist") {
-        const { error: doctorError } = await admin.from("doctors").insert({
-          profile_id: created.user.id,
-          display_name: fullName || email,
-          specialty: specialty || null,
+      if (!targetUser) {
+        const { data: created, error } = await admin.auth.admin.createUser({
           email,
-          license_number: licenseNumber || null,
-          active: true,
+          password,
+          email_confirm: true,
+          user_metadata: { full_name: fullName || email },
+          app_metadata: { must_change_password: true },
         });
-        if (doctorError) throw doctorError;
+        if (error || !created.user) throw error ?? new Error("User creation failed.");
+        targetUser = created.user;
+        createdNow = true;
       }
 
-      return Response.json({ id: created.user.id, email, role }, { headers: cors });
+      const { error: profileUpdateError } = await admin
+        .from("profiles")
+        .update({ full_name: fullName || email, active: true })
+        .eq("id", targetUser.id);
+      if (profileUpdateError) throw profileUpdateError;
+
+      const { error: membershipError } = await admin.from("clinic_memberships").upsert({
+        clinic_id: clinicId,
+        user_id: targetUser.id,
+        role,
+        active: true,
+      }, { onConflict: "clinic_id,user_id" });
+      if (membershipError) throw membershipError;
+
+      if (role === "dentist") {
+        const { data: existingDoctor, error: doctorLookupError } = await admin
+          .from("doctors")
+          .select("id")
+          .eq("clinic_id", clinicId)
+          .eq("profile_id", targetUser.id)
+          .maybeSingle();
+        if (doctorLookupError) throw doctorLookupError;
+
+        if (existingDoctor) {
+          const { error: updateDoctorError } = await admin.from("doctors").update({
+            display_name: fullName || email,
+            specialty: specialty || null,
+            license_number: licenseNumber || null,
+            email,
+            active: true,
+          }).eq("id", existingDoctor.id);
+          if (updateDoctorError) throw updateDoctorError;
+        } else {
+          const { error: doctorError } = await admin.from("doctors").insert({
+            clinic_id: clinicId,
+            profile_id: targetUser.id,
+            display_name: fullName || email,
+            specialty: specialty || null,
+            license_number: licenseNumber || null,
+            email,
+            active: true,
+          });
+          if (doctorError) throw doctorError;
+        }
+      }
+
+      return Response.json({
+        id: targetUser.id,
+        email,
+        role,
+        temporary_password: createdNow,
+      }, { headers: cors });
     }
 
     if (action === "update") {
@@ -142,57 +193,55 @@ Deno.serve(async (req: Request) => {
       const role = String(body?.role ?? "");
       const active = Boolean(body?.active);
 
-      if (!userId || !MANAGEABLE_ROLES.includes(role as typeof MANAGEABLE_ROLES[number])) {
+      if (!userId || !STAFF_ROLES.includes(role as typeof STAFF_ROLES[number])) {
         return Response.json({ error: "Invalid staff user or role." }, { status: 400, headers: cors });
       }
+
       const { data: previous, error: previousError } = await admin
-        .from("profiles")
-        .select("role,full_name")
-        .eq("id", userId)
+        .from("clinic_memberships")
+        .select("role")
+        .eq("clinic_id", clinicId)
+        .eq("user_id", userId)
         .single();
       if (previousError) throw previousError;
 
-      if (previous.role === "admin") {
-        return Response.json(
-          { error: "The owner administrator account cannot be modified here." },
-          { status: 400, headers: cors },
-        );
+      if (previous.role === "clinic_owner") {
+        return Response.json({ error: "Clinic owner access cannot be modified here." }, { status: 400, headers: cors });
       }
 
-      const { error } = await admin.from("profiles").update({ role, active }).eq("id", userId);
-      if (error) throw error;
+      const { error: membershipError } = await admin
+        .from("clinic_memberships")
+        .update({ role, active })
+        .eq("clinic_id", clinicId)
+        .eq("user_id", userId);
+      if (membershipError) throw membershipError;
+
+      const { data: existingDoctor } = await admin
+        .from("doctors")
+        .select("id")
+        .eq("clinic_id", clinicId)
+        .eq("profile_id", userId)
+        .maybeSingle();
 
       if (role === "dentist") {
-        const { data: existingDoctor, error: doctorLookupError } = await admin
-          .from("doctors")
-          .select("id")
-          .eq("profile_id", userId)
-          .maybeSingle();
-        if (doctorLookupError) throw doctorLookupError;
-
         if (existingDoctor) {
-          const { error: doctorUpdateError } = await admin
-            .from("doctors")
-            .update({ active })
-            .eq("id", existingDoctor.id);
-          if (doctorUpdateError) throw doctorUpdateError;
+          const { error } = await admin.from("doctors").update({ active }).eq("id", existingDoctor.id);
+          if (error) throw error;
         } else {
-          const { data: targetUser, error: targetUserError } = await admin.auth.admin.getUserById(userId);
-          if (targetUserError) throw targetUserError;
-          const { error: doctorCreateError } = await admin.from("doctors").insert({
+          const { data: profile } = await admin.from("profiles").select("full_name").eq("id", userId).maybeSingle();
+          const { data: userData } = await admin.auth.admin.getUserById(userId);
+          const { error } = await admin.from("doctors").insert({
+            clinic_id: clinicId,
             profile_id: userId,
-            display_name: previous.full_name || targetUser.user?.email || "Dentist",
-            email: targetUser.user?.email ?? null,
+            display_name: profile?.full_name || userData.user?.email || "Dentist",
+            email: userData.user?.email ?? null,
             active,
           });
-          if (doctorCreateError) throw doctorCreateError;
+          if (error) throw error;
         }
-      } else if (previous.role === "dentist") {
-        const { error: deactivateDoctorError } = await admin
-          .from("doctors")
-          .update({ active: false })
-          .eq("profile_id", userId);
-        if (deactivateDoctorError) throw deactivateDoctorError;
+      } else if (existingDoctor) {
+        const { error } = await admin.from("doctors").update({ active: false }).eq("id", existingDoctor.id);
+        if (error) throw error;
       }
 
       return Response.json({ ok: true }, { headers: cors });

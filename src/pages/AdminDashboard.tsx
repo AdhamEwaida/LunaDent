@@ -6,12 +6,13 @@ import {
   Menu, X, Bell, ChevronDown, TrendingUp, AlertCircle, CheckCircle2,
   Plus, Search, Filter, Eye, Edit, Trash2, Phone, Mail, MoreVertical,
   MessageSquare, Stethoscope, BookOpen, Image, BarChart3, LogOut, UserPlus,
-  Clock, ArrowUp, ArrowDown, Smile, Briefcase, ClipboardList, Package
+  Clock, ArrowUp, ArrowDown, Smile, Briefcase, ClipboardList, Package, Palette
 } from "lucide-react";
 import { FadeIn, StaggerGroup, StaggerItem, HoverCard } from "@/components/Motion";
 import { DOCTORS, TREATMENTS, IMAGES } from "@/lib/data";
 import { ClinicAppointments, ClinicBookingRequests, ClinicDashboard, ClinicDoctors, ClinicInventory, ClinicPatients, ClinicPatientWorkspace, ClinicServices, ClinicTreatmentPlans, ClinicUsers } from "@/pages/ClinicOperations";
 import { useAuth } from "@/auth/AuthContext";
+import SiteBuilder from "@/pages/SiteBuilder";
 
 const ADMIN_NAV = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/admin", section: "main" },
@@ -22,6 +23,7 @@ const ADMIN_NAV = [
   { icon: Stethoscope, label: "Doctors", path: "/admin/doctors", section: "clinic" },
   { icon: Briefcase, label: "Treatments", path: "/admin/services", section: "clinic" },
   { icon: Package, label: "Inventory", path: "/admin/inventory", section: "clinic" },
+  { icon: Palette, label: "Website Builder", path: "/admin/site-builder", section: "marketing" },
   { icon: FileText, label: "Accounting", path: "/accounting", section: "finance" },
 ];
 
@@ -30,7 +32,7 @@ const SECTIONS = { main: "Operations", clinic: "Clinical", marketing: "Marketing
 function AdminSidebar({ open, setOpen }: { open: boolean; setOpen: (v: boolean) => void }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { signOut, demoMode, role } = useAuth();
+  const { signOut, demoMode, role, isSuperAdmin, memberships, activeClinic, activeClinicId, setActiveClinicId } = useAuth();
   const visiblePaths: Record<string, string[]> = {
     dentist: ["/admin", "/admin/patients", "/admin/appointments", "/admin/treatment-plans", "/admin/inventory"],
     receptionist: ["/admin", "/admin/patients", "/admin/appointments", "/admin/leads", "/admin/doctors", "/admin/services", "/accounting"],
@@ -53,12 +55,22 @@ function AdminSidebar({ open, setOpen }: { open: boolean; setOpen: (v: boolean) 
       <aside className={`fixed top-0 bottom-0 left-0 z-40 w-60 flex flex-col transition-transform duration-300 lg:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full"}`}
         style={{ background: "var(--primary)" }}>
         <div className="flex items-center justify-between px-4 py-4 border-b" style={{ borderColor: "rgba(255,255,255,0.1)" }}>
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold bg-white/15 text-white">L</div>
-            <span className="text-sm font-bold text-white" style={{ fontFamily: "'Cormorant Garamond', serif" }}>LunaDent CRM</span>
+          <Link to="/admin" className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold bg-white/15 text-white shrink-0">L</div>
+            <span className="text-sm font-bold text-white truncate" style={{ fontFamily: "'Cormorant Garamond', serif" }}>{activeClinic?.name || "Clinic Workspace"}</span>
           </Link>
           <button onClick={() => setOpen(false)} className="text-white/60 lg:hidden"><X size={16} /></button>
         </div>
+
+        {memberships.length > 1 && (
+          <div className="px-3 pt-3">
+            <label className="text-[10px] uppercase tracking-wider font-semibold" style={{ color:"rgba(255,255,255,.35)" }}>Current clinic</label>
+            <select value={activeClinicId || ""} onChange={(e)=>setActiveClinicId(e.target.value)}
+              className="mt-1 w-full px-2 py-2 rounded-lg text-xs border-0 bg-white/10 text-white">
+              {memberships.map(membership => <option key={membership.clinic_id} value={membership.clinic_id} className="text-slate-900">{membership.clinic?.name || membership.clinic_id}</option>)}
+            </select>
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto px-3 py-4">
           {grouped.map(g => (
@@ -94,8 +106,13 @@ function AdminSidebar({ open, setOpen }: { open: boolean; setOpen: (v: boolean) 
               <Settings size={14} />Users & Access
             </Link>
           )}
-          <Link to="/" className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm" style={{ color: "rgba(255,255,255,0.5)" }}>
-            <Smile size={14} />Back to Website
+          {isSuperAdmin && (
+            <Link to="/super-admin" className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm" style={{ color:"rgba(255,255,255,.72)" }}>
+              <LayoutDashboard size={14} />Super Admin
+            </Link>
+          )}
+          <Link to={activeClinic ? `/c/${activeClinic.slug}` : "/"} className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm" style={{ color: "rgba(255,255,255,0.5)" }}>
+            <Smile size={14} />Clinic Website
           </Link>
           {!demoMode && <button onClick={async () => { await signOut(); navigate("/staff/login", { replace: true }); }} className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm" style={{ color: "rgba(255,255,255,0.5)" }}>
             <LogOut size={14} />Sign Out
@@ -107,10 +124,10 @@ function AdminSidebar({ open, setOpen }: { open: boolean; setOpen: (v: boolean) 
 }
 
 function AdminHeader({ title, setOpen }: { title: string; setOpen: (v: boolean) => void }) {
-  const { user, role } = useAuth();
+  const { user, role, activeClinicRole } = useAuth();
   const displayName = String(user?.user_metadata?.full_name || user?.email || role || "Staff");
   const initials = displayName.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "ST";
-  const roleLabel = role ? role.charAt(0).toUpperCase() + role.slice(1) : "Staff";
+  const roleLabel = activeClinicRole === "clinic_owner" ? "Clinic Owner" : role ? role.charAt(0).toUpperCase() + role.slice(1) : "Staff";
   return (
     <header className="h-14 border-b flex items-center px-4 gap-3"
       style={{ background: "var(--card)", borderColor: "var(--border)" }}>
@@ -635,6 +652,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/admin/doctors": "Doctors",
   "/admin/services": "Services",
   "/admin/users": "Users & Access",
+  "/admin/site-builder": "Website Builder",
   "/admin/surveys": "Surveys",
   "/admin/rewards": "Rewards",
   "/admin/media": "Media Center",
@@ -659,6 +677,7 @@ export default function AdminDashboardPage() {
     if (p === "/admin/doctors") return <ClinicDoctors />;
     if (p === "/admin/services") return <ClinicServices />;
     if (p === "/admin/users") return <ClinicUsers />;
+    if (p === "/admin/site-builder") return <SiteBuilder />;
     return <ClinicDashboard />;
   };
 

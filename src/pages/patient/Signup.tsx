@@ -1,15 +1,44 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { CheckCircle2, LockKeyhole, Mail, Phone, UserRound } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 import { clinicRepository } from "@/clinic/repository";
+import { saasRepository } from "@/saas/repository";
+import type { PublicClinicSite } from "@/saas/types";
 
 const cardStyle = { background: "var(--card)", borderColor: "var(--border)" };
 const muted = { color: "var(--muted-foreground)" };
 
+function useClinicSignupContext() {
+  const { clinicSlug = "" } = useParams();
+  const [site, setSite] = useState<PublicClinicSite | null>(null);
+  const [loadingClinic, setLoadingClinic] = useState(Boolean(clinicSlug));
+  const [clinicError, setClinicError] = useState("");
+
+  useEffect(() => {
+    if (!clinicSlug) {
+      setLoadingClinic(false);
+      return;
+    }
+    let active = true;
+    void saasRepository.getClinicSiteBySlug(clinicSlug)
+      .then((row) => {
+        if (!active) return;
+        setSite(row);
+        if (!row) setClinicError("Clinic website is unavailable.");
+      })
+      .catch((err) => active && setClinicError(err instanceof Error ? err.message : "Unable to load clinic."))
+      .finally(() => active && setLoadingClinic(false));
+    return () => { active = false; };
+  }, [clinicSlug]);
+
+  return { clinicSlug, site, loadingClinic, clinicError };
+}
+
 export function PatientSignup() {
-  const { user, role, signUpPatient } = useAuth();
+  const { user, role, isSuperAdmin, signUpPatient } = useAuth();
   const navigate = useNavigate();
+  const { clinicSlug, site, loadingClinic, clinicError } = useClinicSignupContext();
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
@@ -22,8 +51,25 @@ export function PatientSignup() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
-  if (user && role === "patient") return <Navigate to="/patient-portal/complete-profile" replace />;
+  if (!clinicSlug) {
+    return (
+      <div className="min-h-screen grid place-items-center px-4 bg-slate-50">
+        <div className="max-w-md text-center rounded-3xl bg-white border p-8">
+          <UserRound size={38} className="mx-auto text-slate-400" />
+          <h1 className="text-2xl font-bold mt-4">Open your clinic website first</h1>
+          <p className="text-sm text-slate-600 mt-2">Patient accounts belong to a specific clinic. Open the clinic website and choose Patient Sign Up from there.</p>
+          <Link to="/" className="inline-block mt-6 px-5 py-3 rounded-xl bg-slate-950 text-white font-semibold">Back to LunaDent</Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (loadingClinic) return <div className="min-h-screen grid place-items-center bg-slate-50 text-slate-500">Loading clinic...</div>;
+  if (!site) return <div className="min-h-screen grid place-items-center bg-slate-50 px-4"><div className="text-center"><h1 className="text-xl font-bold">Clinic unavailable</h1><p className="text-sm text-slate-500 mt-2">{clinicError}</p></div></div>;
+
+  if (user && isSuperAdmin) return <Navigate to="/super-admin" replace />;
   if (user && role && role !== "patient") return <Navigate to="/admin" replace />;
+  if (user && role === "patient") return <Navigate to={`/c/${clinicSlug}/patient/complete-profile`} replace />;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -43,12 +89,13 @@ export function PatientSignup() {
         firstName: form.firstName,
         lastName: form.lastName,
         phone: form.phone,
+        clinicSlug,
       });
 
       if (result.needsEmailConfirmation) {
-        setMessage("Account created. Check your email and confirm your address, then return to LunaDent to finish your patient profile.");
+        setMessage(`Account created for ${site.clinic.name}. Check your email and confirm your address, then continue your patient profile.`);
       } else {
-        navigate("/patient-portal/complete-profile", { replace: true });
+        navigate(`/c/${clinicSlug}/patient/complete-profile`, { replace: true });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to create your patient account.");
@@ -58,22 +105,19 @@ export function PatientSignup() {
   };
 
   return (
-    <div className="min-h-screen grid place-items-center px-4 py-10" style={{ background: "var(--background)" }}>
+    <div className="min-h-screen grid place-items-center px-4 py-10" style={{ background: site.settings.tokens?.colors?.background || "#f8fafc" }}>
       <div className="w-full max-w-lg">
         <div className="mb-5 text-center">
           <div className="w-14 h-14 rounded-2xl grid place-items-center text-white mx-auto mb-4"
-            style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))" }}>
+            style={{ background: site.settings.tokens?.colors?.primary || "#2457C5" }}>
             <UserRound size={24} />
           </div>
-          <h1 className="text-3xl font-bold" style={{ color: "var(--primary)", fontFamily: "'Cormorant Garamond', serif" }}>
-            Create Patient Account
-          </h1>
-          <p className="text-sm mt-2" style={muted}>
-            Create your secure LunaDent profile to access appointments, treatment plans, invoices, payments, and documents.
-          </p>
+          <div className="text-xs font-semibold uppercase tracking-wider" style={{color:site.settings.tokens?.colors?.primary || "#2457C5"}}>{site.clinic.name}</div>
+          <h1 className="text-3xl font-bold mt-2">Create Patient Account</h1>
+          <p className="text-sm mt-2 text-slate-600">Create your secure patient profile for this clinic.</p>
         </div>
 
-        <form onSubmit={submit} className="rounded-3xl border p-7 shadow-sm" style={cardStyle}>
+        <form onSubmit={submit} className="rounded-3xl border p-7 shadow-sm bg-white">
           {error && <div className="mb-4 rounded-xl px-3 py-2 text-sm bg-red-50 text-red-700">{error}</div>}
           {message && <div className="mb-4 rounded-xl px-3 py-3 text-sm bg-emerald-50 text-emerald-800 flex gap-2">
             <CheckCircle2 size={18} className="shrink-0 mt-0.5" />{message}
@@ -119,32 +163,30 @@ export function PatientSignup() {
                 autoComplete="new-password" className="w-full pl-9 pr-3 py-3 rounded-xl border bg-transparent text-sm" />
             </div>
 
-            <button disabled={loading} className="w-full py-3 rounded-xl text-sm font-semibold"
-              style={{ background: "var(--primary)", color: "white" }}>
+            <button disabled={loading} className="w-full py-3 rounded-xl text-sm font-semibold text-white"
+              style={{ background: site.settings.tokens?.colors?.primary || "#2457C5" }}>
               {loading ? "Creating account..." : "Create Patient Account"}
             </button>
           </>}
 
-          <div className="mt-5 pt-5 border-t text-center" style={{ borderColor: "var(--border)" }}>
-            <p className="text-xs mb-2" style={muted}>Already have a patient account?</p>
-            <Link to="/patient-portal/login" className="text-sm font-semibold" style={{ color: "var(--accent)" }}>
+          <div className="mt-5 pt-5 border-t text-center">
+            <p className="text-xs mb-2 text-slate-500">Already have an account?</p>
+            <Link to={`/c/${clinicSlug}/patient/login`} className="text-sm font-semibold" style={{ color: site.settings.tokens?.colors?.primary || "#2457C5" }}>
               Sign In to Patient Portal
             </Link>
           </div>
         </form>
 
-        <div className="flex justify-center gap-4 mt-4 text-xs">
-          <Link to="/staff/login" style={muted}>Staff Sign In</Link>
-          <Link to="/" style={muted}>Back to Website</Link>
-        </div>
+        <Link to={`/c/${clinicSlug}`} className="block text-center text-xs mt-4 text-slate-500">Back to {site.clinic.name}</Link>
       </div>
     </div>
   );
 }
 
 export function CompletePatientProfile() {
-  const { user, role, loading: authLoading, signOut } = useAuth();
+  const { user, role, isSuperAdmin, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
+  const { clinicSlug, site, loadingClinic, clinicError } = useClinicSignupContext();
   const [form, setForm] = useState({
     first_name: "",
     last_name: "",
@@ -158,7 +200,7 @@ export function CompletePatientProfile() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!user || role !== "patient") {
+    if (!clinicSlug || !site || !user || role !== "patient") {
       setChecking(false);
       return;
     }
@@ -171,42 +213,36 @@ export function CompletePatientProfile() {
     }));
 
     let active = true;
-    void clinicRepository.getPatientByAuthUserId(user.id)
+    void clinicRepository.getPatientByAuthUserId(user.id, site.clinic.id)
       .then((patient) => {
         if (!active) return;
-        if (patient) navigate("/patient-portal", { replace: true });
+        if (patient) navigate(`/c/${clinicSlug}/patient`, { replace: true });
       })
-      .catch((err) => {
-        if (active) setError(err instanceof Error ? err.message : "Unable to check your patient profile.");
-      })
-      .finally(() => {
-        if (active) setChecking(false);
-      });
+      .catch((err) => active && setError(err instanceof Error ? err.message : "Unable to check your patient profile."))
+      .finally(() => active && setChecking(false));
 
     return () => { active = false; };
-  }, [user, role, navigate]);
+  }, [clinicSlug, site?.clinic.id, user, role, navigate]);
 
-  if (authLoading || checking) {
-    return <div className="min-h-screen grid place-items-center" style={{ background:"var(--background)", color:"var(--muted-foreground)" }}>
-      Preparing your patient profile...
-    </div>;
-  }
+  if (!clinicSlug) return <Navigate to="/" replace />;
+  if (loadingClinic || authLoading || checking) return <div className="min-h-screen grid place-items-center bg-slate-50 text-slate-500">Preparing patient profile...</div>;
+  if (!site) return <div className="min-h-screen grid place-items-center bg-slate-50 text-slate-500">{clinicError || "Clinic unavailable."}</div>;
 
   if (!user) {
     return (
-      <div className="min-h-screen grid place-items-center px-4" style={{ background:"var(--background)" }}>
-        <div className="max-w-md text-center rounded-3xl border p-7" style={cardStyle}>
+      <div className="min-h-screen grid place-items-center px-4 bg-slate-50">
+        <div className="max-w-md text-center rounded-3xl border bg-white p-7">
           <Mail size={34} className="mx-auto mb-3" />
-          <h1 className="text-2xl font-bold" style={{ color:"var(--primary)", fontFamily:"'Cormorant Garamond', serif" }}>Confirm your email first</h1>
-          <p className="text-sm mt-2 mb-6" style={muted}>After confirming your email, sign in to finish creating your patient profile.</p>
-          <Link to="/patient-portal/login" className="block py-3 rounded-xl font-semibold text-sm" style={{ background:"var(--primary)", color:"white" }}>
-            Go to Patient Sign In
-          </Link>
+          <h1 className="text-2xl font-bold">Confirm your email first</h1>
+          <p className="text-sm mt-2 mb-6 text-slate-600">After confirming your email, sign in to finish creating your profile for {site.clinic.name}.</p>
+          <Link to={`/c/${clinicSlug}/patient/login`} className="block py-3 rounded-xl font-semibold text-sm text-white"
+            style={{ background: site.settings.tokens?.colors?.primary || "#2457C5" }}>Go to Patient Sign In</Link>
         </div>
       </div>
     );
   }
 
+  if (isSuperAdmin) return <Navigate to="/super-admin" replace />;
   if (role !== "patient") return <Navigate to="/admin" replace />;
 
   const submit = async (event: FormEvent) => {
@@ -215,10 +251,11 @@ export function CompletePatientProfile() {
     setSaving(true);
     try {
       await clinicRepository.createMyPatientProfile({
+        clinic_id: site.clinic.id,
         ...form,
         email: user.email || "",
       });
-      navigate("/patient-portal", { replace: true });
+      navigate(`/c/${clinicSlug}/patient`, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to create your patient profile.");
     } finally {
@@ -227,15 +264,13 @@ export function CompletePatientProfile() {
   };
 
   return (
-    <div className="min-h-screen grid place-items-center px-4 py-10" style={{ background:"var(--background)" }}>
-      <form onSubmit={submit} className="w-full max-w-lg rounded-3xl border p-7 shadow-sm" style={cardStyle}>
-        <div className="w-12 h-12 rounded-2xl grid place-items-center text-white mb-4" style={{ background:"var(--primary)" }}>
-          <UserRound size={22} />
-        </div>
-        <h1 className="text-3xl font-bold" style={{ color:"var(--primary)", fontFamily:"'Cormorant Garamond', serif" }}>
-          Complete Your Patient Profile
-        </h1>
-        <p className="text-sm mt-2 mb-6" style={muted}>This information creates your LunaDent patient record and links it securely to {user.email}.</p>
+    <div className="min-h-screen grid place-items-center px-4 py-10" style={{ background: site.settings.tokens?.colors?.background || "#f8fafc" }}>
+      <form onSubmit={submit} className="w-full max-w-lg rounded-3xl border p-7 shadow-sm bg-white">
+        <div className="w-12 h-12 rounded-2xl grid place-items-center text-white mb-4"
+          style={{ background: site.settings.tokens?.colors?.primary || "#2457C5" }}><UserRound size={22} /></div>
+        <div className="text-xs font-semibold uppercase tracking-wider" style={{color:site.settings.tokens?.colors?.primary || "#2457C5"}}>{site.clinic.name}</div>
+        <h1 className="text-3xl font-bold mt-2">Complete Your Patient Profile</h1>
+        <p className="text-sm mt-2 mb-6 text-slate-600">This creates your patient record for this clinic and links it securely to {user.email}.</p>
 
         {error && <div className="mb-4 rounded-xl px-3 py-2 text-sm bg-red-50 text-red-700">{error}</div>}
 
@@ -263,10 +298,7 @@ export function CompletePatientProfile() {
           <label className="text-xs font-semibold">Sex
             <select value={form.sex} onChange={(e)=>setForm({...form,sex:e.target.value as typeof form.sex})}
               className="mt-1.5 mb-4 w-full px-3 py-3 rounded-xl border bg-transparent text-sm">
-              <option value="">Prefer not to say</option>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-              <option value="other">Other</option>
+              <option value="">Prefer not to say</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option>
             </select>
           </label>
         </div>
@@ -276,14 +308,11 @@ export function CompletePatientProfile() {
             className="mt-1.5 mb-5 w-full px-3 py-3 rounded-xl border bg-transparent text-sm min-h-20" />
         </label>
 
-        <button disabled={saving} className="w-full py-3 rounded-xl font-semibold text-sm"
-          style={{ background:"var(--primary)", color:"white" }}>
+        <button disabled={saving} className="w-full py-3 rounded-xl font-semibold text-sm text-white"
+          style={{ background:site.settings.tokens?.colors?.primary || "#2457C5" }}>
           {saving ? "Creating profile..." : "Finish Patient Profile"}
         </button>
-
-        <button type="button" onClick={()=>void signOut()} className="w-full mt-3 py-2 text-xs underline" style={muted}>
-          Sign out
-        </button>
+        <button type="button" onClick={()=>void signOut()} className="w-full mt-3 py-2 text-xs underline text-slate-500">Sign out</button>
       </form>
     </div>
   );

@@ -1,6 +1,7 @@
 export type AppRole = "admin" | "dentist" | "receptionist" | "accountant" | "patient";
 
 export type Patient = {
+  clinic_id?: string;
   id: string;
   auth_user_id?: string | null;
   patient_no: string;
@@ -27,6 +28,7 @@ export type Patient = {
 export type AppointmentStatus = "scheduled" | "confirmed" | "checked_in" | "in_treatment" | "completed" | "cancelled" | "no_show";
 
 export type Appointment = {
+  clinic_id?: string;
   id: string;
   patient_id: string;
   doctor_id?: string | null;
@@ -44,6 +46,7 @@ export type Appointment = {
 export type ToothCondition = "healthy" | "caries" | "filling" | "crown" | "implant" | "missing" | "extraction" | "root_canal" | "bridge" | "veneer" | "fracture";
 
 export type DentalChartEntry = {
+  clinic_id?: string;
   id: string;
   patient_id: string;
   tooth_no: number;
@@ -55,6 +58,7 @@ export type DentalChartEntry = {
 };
 
 export type ClinicalNote = {
+  clinic_id?: string;
   id: string;
   patient_id: string;
   doctor_id?: string | null;
@@ -64,6 +68,7 @@ export type ClinicalNote = {
 };
 
 export type TreatmentPlan = {
+  clinic_id?: string;
   id: string;
   patient_id: string;
   title: string;
@@ -76,6 +81,7 @@ export type TreatmentPlan = {
 };
 
 export type TreatmentPlanItem = {
+  clinic_id?: string;
   id: string;
   treatment_plan_id: string;
   treatment_id?: string | null;
@@ -89,6 +95,7 @@ export type TreatmentPlanItem = {
 };
 
 export type Invoice = {
+  clinic_id?: string;
   id: string;
   patient_id: string;
   invoice_no: string;
@@ -105,6 +112,7 @@ export type Invoice = {
 };
 
 export type InventoryItem = {
+  clinic_id?: string;
   id: string;
   sku: string;
   name: string;
@@ -120,6 +128,7 @@ export type InventoryItem = {
 };
 
 export type Doctor = {
+  clinic_id?: string;
   id: string;
   profile_id?: string | null;
   display_name: string;
@@ -130,6 +139,7 @@ export type Doctor = {
 };
 
 export type TreatmentCatalogItem = {
+  clinic_id?: string;
   id: string;
   code: string;
   name_en: string;
@@ -140,6 +150,7 @@ export type TreatmentCatalogItem = {
 };
 
 export type BookingRequest = {
+  clinic_id?: string;
   id: string;
   full_name: string;
   email?: string | null;
@@ -154,6 +165,7 @@ export type BookingRequest = {
 };
 
 export type Payment = {
+  clinic_id?: string;
   id: string;
   patient_id: string;
   invoice_id?: string | null;
@@ -165,6 +177,7 @@ export type Payment = {
 };
 
 export type PatientDocument = {
+  clinic_id?: string;
   id: string;
   patient_id: string;
   document_type: string;
