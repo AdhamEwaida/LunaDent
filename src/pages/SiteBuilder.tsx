@@ -128,6 +128,36 @@ export default function SiteBuilder() {
     } : current);
   };
 
+  const updateSectionContent = (section: string, key: string, value: string) => {
+    setSettings(current => current ? {
+      ...current,
+      content: {
+        ...(current.content || {}),
+        [section]: { ...(current.content?.[section] || {}), [key]: value },
+      },
+    } : current);
+  };
+
+  const updateJourneyStep = (index: number, key: "title" | "text", value: string) => {
+    setSettings(current => {
+      if (!current) return current;
+      const defaults = [
+        { step: "01", title: "Book online", text: "Send your preferred date and treatment." },
+        { step: "02", title: "Visit the clinic", text: "Receive care from your dental team." },
+        { step: "03", title: "Stay connected", text: "Use the secure patient portal for follow-up." },
+      ];
+      const steps = [...(current.content?.journey?.steps || defaults)].map((item: any) => ({ ...item }));
+      steps[index] = { ...steps[index], [key]: value };
+      return {
+        ...current,
+        content: {
+          ...(current.content || {}),
+          journey: { ...(current.content?.journey || {}), steps },
+        },
+      };
+    });
+  };
+
   const toggleSection = (key: string) => {
     setSettings(current => {
       if (!current) return current;
@@ -283,6 +313,55 @@ export default function SiteBuilder() {
               <div className="grid grid-cols-2 gap-2">
                 <input value={settings.content?.hero?.primaryCta || ""} onChange={e=>updateHero("primaryCta",e.target.value)} placeholder="Primary button" className="w-full px-3 py-2.5 rounded-xl border" />
                 <input value={settings.content?.hero?.secondaryCta || ""} onChange={e=>updateHero("secondaryCta",e.target.value)} placeholder="Secondary button" className="w-full px-3 py-2.5 rounded-xl border" />
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border bg-white p-5">
+            <div className="font-bold">Section copy</div>
+            <div className="space-y-5 mt-4">
+              <div className="space-y-2">
+                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Treatments</div>
+                <input value={settings.content?.services?.eyebrow || ""} onChange={e=>updateSectionContent("services","eyebrow",e.target.value)} placeholder="Treatments eyebrow" className="w-full px-3 py-2.5 rounded-xl border" />
+                <input value={settings.content?.services?.title || ""} onChange={e=>updateSectionContent("services","title",e.target.value)} placeholder="Care designed around the patient." className="w-full px-3 py-2.5 rounded-xl border" />
+                <textarea value={settings.content?.services?.subtitle || ""} onChange={e=>updateSectionContent("services","subtitle",e.target.value)} placeholder="Treatments section description" className="w-full px-3 py-2.5 rounded-xl border min-h-16" />
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Doctors</div>
+                <input value={settings.content?.doctors?.eyebrow || ""} onChange={e=>updateSectionContent("doctors","eyebrow",e.target.value)} placeholder="Clinical Team" className="w-full px-3 py-2.5 rounded-xl border" />
+                <input value={settings.content?.doctors?.title || ""} onChange={e=>updateSectionContent("doctors","title",e.target.value)} placeholder="Meet the dental team." className="w-full px-3 py-2.5 rounded-xl border" />
+                <textarea value={settings.content?.doctors?.subtitle || ""} onChange={e=>updateSectionContent("doctors","subtitle",e.target.value)} placeholder="Doctors section description" className="w-full px-3 py-2.5 rounded-xl border min-h-16" />
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Patient Journey</div>
+                <input value={settings.content?.journey?.title || ""} onChange={e=>updateSectionContent("journey","title",e.target.value)} placeholder="A simple patient journey." className="w-full px-3 py-2.5 rounded-xl border" />
+                {[0,1,2].map(index=>{
+                  const defaults = [
+                    {title:"Book online",text:"Send your preferred date and treatment."},
+                    {title:"Visit the clinic",text:"Receive care from your dental team."},
+                    {title:"Stay connected",text:"Use the secure patient portal for follow-up."},
+                  ];
+                  const step = settings.content?.journey?.steps?.[index] || defaults[index];
+                  return <div key={index} className="rounded-xl bg-slate-50 p-3 space-y-2">
+                    <div className="text-[11px] font-semibold text-slate-500">Step {index+1}</div>
+                    <input value={step?.title || ""} onChange={e=>updateJourneyStep(index,"title",e.target.value)} className="w-full px-3 py-2 rounded-lg border bg-white text-sm" />
+                    <textarea value={step?.text || ""} onChange={e=>updateJourneyStep(index,"text",e.target.value)} className="w-full px-3 py-2 rounded-lg border bg-white text-sm min-h-14" />
+                  </div>;
+                })}
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Booking CTA</div>
+                <input value={settings.content?.booking?.title || ""} onChange={e=>updateSectionContent("booking","title",e.target.value)} placeholder="Ready to request an appointment?" className="w-full px-3 py-2.5 rounded-xl border" />
+                <textarea value={settings.content?.booking?.subtitle || ""} onChange={e=>updateSectionContent("booking","subtitle",e.target.value)} placeholder="Booking CTA description" className="w-full px-3 py-2.5 rounded-xl border min-h-16" />
+                <input value={settings.content?.booking?.button || ""} onChange={e=>updateSectionContent("booking","button",e.target.value)} placeholder="Book Consultation" className="w-full px-3 py-2.5 rounded-xl border" />
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Contact</div>
+                <textarea value={settings.content?.contact?.description || ""} onChange={e=>updateSectionContent("contact","description",e.target.value)} placeholder="Contact section description" className="w-full px-3 py-2.5 rounded-xl border min-h-16" />
               </div>
             </div>
           </section>
