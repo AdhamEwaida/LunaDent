@@ -304,13 +304,38 @@ begin
   end if;
 end $$;
 
-insert into storage.buckets (id,name,public)
-values ('patient-files','patient-files',false)
-on conflict (id) do update set public=false;
+insert into storage.buckets (id,name,public,file_size_limit,allowed_mime_types)
+values (
+  'patient-files',
+  'patient-files',
+  false,
+  26214400,
+  array[
+    'application/pdf',
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'application/dicom',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  ]::text[]
+)
+on conflict (id) do update
+set public=false,
+    file_size_limit=excluded.file_size_limit,
+    allowed_mime_types=excluded.allowed_mime_types;
 
-insert into storage.buckets (id,name,public,file_size_limit)
-values ('clinic-assets','clinic-assets',true,10485760)
-on conflict (id) do update set public=true,file_size_limit=10485760;
+insert into storage.buckets (id,name,public,file_size_limit,allowed_mime_types)
+values (
+  'clinic-assets',
+  'clinic-assets',
+  true,
+  10485760,
+  array['image/jpeg','image/png','image/webp','image/avif','image/gif']::text[]
+)
+on conflict (id) do update
+set public=true,
+    file_size_limit=excluded.file_size_limit,
+    allowed_mime_types=excluded.allowed_mime_types;
 
 drop policy if exists patient_files_patient_read on storage.objects;
 drop policy if exists patient_files_staff_read on storage.objects;
