@@ -547,14 +547,14 @@ export const clinicRepository = {
     return data?.users ?? [];
   },
 
-  async createClinicUser(input: { email: string; password: string; full_name: string; role: "admin" | "dentist" | "receptionist" | "accountant"; specialty?: string; license_number?: string }): Promise<void> {
+  async createClinicUser(input: { email: string; password: string; full_name: string; role: "dentist" | "receptionist" | "accountant"; specialty?: string; license_number?: string }): Promise<void> {
     if (!supabase) throw new Error("Live database is required for user management.");
     const { data, error } = await supabase.functions.invoke("manage-clinic-users", { body: { action: "create", ...input } });
     if (error) throw error;
     if (data?.error) throw new Error(String(data.error));
   },
 
-  async updateClinicUser(input: { user_id: string; role: "admin" | "dentist" | "receptionist" | "accountant"; active: boolean }): Promise<void> {
+  async updateClinicUser(input: { user_id: string; role: "dentist" | "receptionist" | "accountant"; active: boolean }): Promise<void> {
     if (!supabase) throw new Error("Live database is required for user management.");
     const { data, error } = await supabase.functions.invoke("manage-clinic-users", { body: { action: "update", ...input } });
     if (error) throw error;
