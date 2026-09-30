@@ -12,6 +12,7 @@ import SaasLanding from "@/pages/SaasLanding";
 import SuperAdmin from "@/pages/SuperAdmin";
 import ClinicSite from "@/pages/ClinicSite";
 import ClinicBooking from "@/pages/ClinicBooking";
+import ClinicOnboarding from "@/pages/ClinicOnboarding";
 
 function NotFound() {
   return (
@@ -71,6 +72,11 @@ export default function App() {
           } />
 
           {/* Clinic workspace */}
+          <Route path="/onboarding" element={
+            <ProtectedRoute roles={["admin"]}>
+              <ClinicOnboarding />
+            </ProtectedRoute>
+          } />
           <Route path="/admin" element={secureAdmin([...staffRoles])} />
           <Route path="/admin/patients" element={secureAdmin([...staffRoles])} />
           <Route path="/admin/patients/:patientId" element={secureAdmin([...staffRoles])} />
