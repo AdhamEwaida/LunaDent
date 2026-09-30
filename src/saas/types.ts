@@ -19,6 +19,7 @@ export type Clinic = {
   locale: string;
   onboarding_completed: boolean;
   logo_path?: string | null;
+  onboarding_completed?: boolean;
   created_at: string;
   updated_at: string;
 };
