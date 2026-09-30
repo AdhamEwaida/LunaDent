@@ -3,7 +3,7 @@ import type { AppRole } from "@/clinic/types";
 import { useAuth } from "./AuthContext";
 
 export default function ProtectedRoute({ children, roles }: { children: React.ReactNode; roles?: AppRole[] }) {
-  const { user, role, loading, accountActive, mustChangePassword } = useAuth();
+  const { user, role, loading, accountActive, mustChangePassword, activeClinic, activeClinicRole } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -13,6 +13,14 @@ export default function ProtectedRoute({ children, roles }: { children: React.Re
   if (!accountActive) return <Navigate to="/staff/login" replace />;
   if (mustChangePassword && location.pathname !== "/staff/change-password") {
     return <Navigate to="/staff/change-password" replace state={{ from: location.pathname }} />;
+  }
+  if (
+    activeClinicRole === "clinic_owner"
+    && activeClinic
+    && activeClinic.onboarding_completed === false
+    && location.pathname !== "/onboarding"
+  ) {
+    return <Navigate to="/onboarding" replace state={{ from: location.pathname }} />;
   }
   if (roles && (!role || !roles.includes(role))) return <Navigate to="/" replace />;
   return <>{children}</>;
