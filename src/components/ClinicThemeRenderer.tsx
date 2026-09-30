@@ -32,7 +32,7 @@ export default function ClinicThemeRenderer({ site, preview = false }: Props) {
 
   const renderSection = (key: string) => {
     if (key === "hero") return (
-      <section className="relative" style={{minHeight:"var(--site-hero-height)", background: themeKey==="luxury" ? "linear-gradient(135deg,var(--site-primary),color-mix(in srgb,var(--site-primary) 68%,#b14ca8))" : "linear-gradient(135deg,var(--site-bg),var(--site-secondary))"}}>
+      <section className="relative" style={{order:sectionOrder("hero"),minHeight:"var(--site-hero-height)", background: themeKey==="luxury" ? "linear-gradient(135deg,var(--site-primary),color-mix(in srgb,var(--site-primary) 68%,#b14ca8))" : "linear-gradient(135deg,var(--site-bg),var(--site-secondary))"}}>
         <div className={`site-container grid gap-10 items-center py-16 ${themeKey==="clinical"?"lg:grid-cols-[1fr_.85fr]":"lg:grid-cols-2"}`} style={{minHeight:"var(--site-hero-height)"}}>
           <div className={themeKey==="luxury" ? "text-white" : ""}>
             <div className="inline-flex items-center gap-2 text-xs font-bold tracking-[.16em] uppercase"><Sparkles size={14}/>{hero.eyebrow || clinic.name}</div>
@@ -58,7 +58,7 @@ export default function ClinicThemeRenderer({ site, preview = false }: Props) {
     );
 
     if (key === "services") return (
-      <section id="services" className="site-section" style={{background:"var(--site-surface)"}}>
+      <section id="services" className="site-section" style={{order:sectionOrder("services"),background:"var(--site-surface)"}}>
         <div className="site-container">
           <div className="max-w-2xl"><div className="text-xs uppercase tracking-[.16em] font-bold" style={{color:"var(--site-primary)"}}>Treatments</div><h2 className="text-4xl font-bold mt-3" style={{fontSize:"calc(2.5rem * var(--site-heading-scale))"}}>Care designed around the patient.</h2></div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mt-10">
@@ -74,7 +74,7 @@ export default function ClinicThemeRenderer({ site, preview = false }: Props) {
     );
 
     if (key === "doctors") return (
-      <section id="doctors" className="site-section">
+      <section id="doctors" className="site-section" style={{order:sectionOrder("doctors")}}>
         <div className="site-container">
           <div className="text-xs uppercase tracking-[.16em] font-bold" style={{color:"var(--site-primary)"}}>Clinical Team</div><h2 className="text-4xl font-bold mt-3">Meet the dental team.</h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mt-10">
@@ -90,7 +90,7 @@ export default function ClinicThemeRenderer({ site, preview = false }: Props) {
     );
 
     if (key === "journey") return (
-      <section className="site-section" style={{background:"var(--site-secondary)"}}>
+      <section className="site-section" style={{order:sectionOrder("journey"),background:"var(--site-secondary)"}}>
         <div className="site-container grid lg:grid-cols-3 gap-4">
           {[["01","Book online","Send your preferred date and treatment."],["02","Visit the clinic","Receive care from your dental team."],["03","Stay connected","Use the secure patient portal for follow-up."]].map(([step,title,text])=><div key={step} className="site-card p-6" style={{background:"var(--site-bg)"}}><div className="text-sm font-bold" style={{color:"var(--site-accent)"}}>{step}</div><h3 className="font-bold text-xl mt-4">{title}</h3><p className="text-sm mt-2" style={{color:"var(--site-muted)"}}>{text}</p></div>)}
         </div>
@@ -98,7 +98,7 @@ export default function ClinicThemeRenderer({ site, preview = false }: Props) {
     );
 
     if (key === "booking") return (
-      <section className="site-section">
+      <section className="site-section" style={{order:sectionOrder("booking")}}>
         <div className="site-container site-card p-8 md:p-12 flex flex-col md:flex-row md:items-center justify-between gap-6" style={{background:"var(--site-primary)",color:"#fff"}}>
           <div><h2 className="text-3xl font-bold">Ready to request an appointment?</h2><p className="mt-2 opacity-75">Choose a treatment, preferred date and time online.</p></div>
           <Link onClick={stopPreview} to={bookingHref} className="site-button px-6 py-3.5 font-semibold whitespace-nowrap" style={{background:"var(--site-accent)",color:"#fff"}}>Book Consultation</Link>
@@ -107,7 +107,7 @@ export default function ClinicThemeRenderer({ site, preview = false }: Props) {
     );
 
     if (key === "contact") return (
-      <section id="contact" className="site-section" style={{background:"var(--site-surface)"}}>
+      <section id="contact" className="site-section" style={{order:sectionOrder("contact"),background:"var(--site-surface)"}}>
         <div className="site-container grid md:grid-cols-3 gap-6">
           <div className="md:col-span-2"><h2 className="text-3xl font-bold">{clinic.name}</h2><p className="mt-3 max-w-xl text-sm" style={{color:"var(--site-muted)"}}>{settings.tagline || "Modern dental care with a connected patient experience."}</p></div>
           <div className="space-y-3 text-sm">
@@ -134,7 +134,7 @@ export default function ClinicThemeRenderer({ site, preview = false }: Props) {
         .site-theme-clinical .site-card{border:1px solid color-mix(in srgb,var(--site-primary) 12%,transparent)}
       `}</style>
 
-      <div className="site-root">
+      <div className="site-root flex flex-col">
         <header className="border-b sticky top-0 z-30 backdrop-blur-xl" style={{height:"var(--site-nav-height)", background:"color-mix(in srgb,var(--site-bg) 92%,transparent)", borderColor:"color-mix(in srgb,var(--site-text) 10%,transparent)"}}>
           <div className="site-container h-full flex items-center justify-between gap-5">
             <Link onClick={stopPreview} to={preview?"#":`/c/${clinic.slug}`} className="flex items-center gap-3 min-w-0">
@@ -153,7 +153,7 @@ export default function ClinicThemeRenderer({ site, preview = false }: Props) {
 
         {orderedSections.map(section=><Fragment key={section.key}>{renderSection(section.key)}</Fragment>)}
 
-        <footer className="py-8 border-t text-sm" style={{borderColor:"color-mix(in srgb,var(--site-text) 10%,transparent)",color:"var(--site-muted)"}}>
+        <footer className="py-8 border-t text-sm" style={{order:999,borderColor:"color-mix(in srgb,var(--site-text) 10%,transparent)",color:"var(--site-muted)"}}>
           <div className="site-container flex flex-col md:flex-row gap-3 justify-between"><span>© 2026 {clinic.name}</span><span>Powered by LunaDent</span></div>
         </footer>
       </div>
