@@ -75,7 +75,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     },
     signUp: async (email, password, fullName) => {
       if (!supabase) return { needsEmailConfirmation: false };
-      const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName || email } } });
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: fullName || email },
+          emailRedirectTo: `${import.meta.env.VITE_SITE_URL || window.location.origin}/staff/login`,
+        },
+      });
       if (error) throw error;
       return { needsEmailConfirmation: !data.session };
     },
