@@ -18,7 +18,7 @@ type AuthState = {
   mustChangePassword: boolean;
   demoMode: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUpPatient: (input: { email: string; password: string; firstName: string; lastName: string; phone?: string }) => Promise<{ needsEmailConfirmation: boolean }>;
+  signUpPatient: (input: { email: string; password: string; firstName: string; lastName: string; phone?: string; clinicSlug?: string }) => Promise<{ needsEmailConfirmation: boolean }>;
   changePassword: (newPassword: string) => Promise<void>;
   signOut: () => Promise<void>;
   setActiveClinicId: (clinicId: string) => void;
@@ -161,7 +161,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
     },
-    signUpPatient: async ({ email, password, firstName, lastName, phone }) => {
+    signUpPatient: async ({ email, password, firstName, lastName, phone, clinicSlug }) => {
       if (!supabase) return { needsEmailConfirmation: false };
       const normalizedEmail = email.trim().toLowerCase();
       const first = firstName.trim();
@@ -179,7 +179,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             last_name: last,
             phone: phone?.trim() || null,
           },
-          emailRedirectTo: `${window.location.origin}/patient-portal/complete-profile`,
+          emailRedirectTo: `${window.location.origin}${clinicSlug ? `/c/${clinicSlug}/patient/complete-profile` : "/patient-portal/complete-profile"}`,
         },
       });
       if (error) throw error;
