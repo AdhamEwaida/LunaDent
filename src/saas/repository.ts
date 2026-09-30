@@ -122,6 +122,7 @@ export const saasRepository = {
       timezone: patch.timezone,
       locale: patch.locale,
       logo_path: patch.logo_path,
+      onboarding_completed: patch.onboarding_completed,
     };
     const payload = Object.fromEntries(Object.entries(allowed).filter(([, value]) => value !== undefined));
     const { data, error } = await db.from("clinics").update(payload).eq("id", clinicId).select("*").single();
