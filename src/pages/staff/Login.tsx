@@ -4,7 +4,7 @@ import { KeyRound, LockKeyhole, Mail, UserPlus } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 
 export default function StaffLogin() {
-  const { user, role, signIn, signUp, claimInitialAdmin, demoMode } = useAuth();
+  const { user, role, mustChangePassword, signIn, signUp, claimInitialAdmin, demoMode } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [email, setEmail] = useState("");
@@ -16,7 +16,10 @@ export default function StaffLogin() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
-  if (user && role && role !== "patient") return <Navigate to="/admin" replace />;
+  if (user && role && role !== "patient") {
+    if (mustChangePassword) return <Navigate to="/staff/change-password" replace />;
+    return <Navigate to="/admin" replace />;
+  }
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
