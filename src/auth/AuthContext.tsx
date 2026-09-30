@@ -158,8 +158,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setRole("admin");
         return;
       }
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
+      setLoading(true);
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        setLoading(false);
+        throw error;
+      }
+      await loadContext(data.user);
     },
     signUpPatient: async ({ email, password, firstName, lastName, phone, clinicSlug }) => {
       if (!supabase) return { needsEmailConfirmation: false };
