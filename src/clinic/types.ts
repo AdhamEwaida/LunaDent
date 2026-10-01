@@ -76,6 +76,7 @@ export type TreatmentPlan = {
   estimated_total: number;
   discount_total: number;
   notes?: string | null;
+  approved_at?: string | null;
   created_at: string;
   patient?: Pick<Patient, "id" | "patient_no" | "first_name" | "last_name"> | null;
 };
