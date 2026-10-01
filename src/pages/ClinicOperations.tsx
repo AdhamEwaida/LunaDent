@@ -775,8 +775,10 @@ function FinanceTab({ patientId }: { patientId: string }) {
 
 export function ClinicPatientWorkspace() {
   const { patientId } = useParams();
-  const { role } = useAuth();
+  const { role, hasFeature } = useAuth();
   const clinicalAccess = role === "admin" || role === "dentist";
+  const documentAccess = role === "admin" || role === "dentist" || role === "receptionist";
+  const financeAccess = hasFeature("accounting");
   const [patient, setPatient] = useState<Patient | null>(null);
   const [tab, setTab] = useState("overview");
   const [loading, setLoading] = useState(true);
@@ -795,7 +797,8 @@ export function ClinicPatientWorkspace() {
     ["appointments", "Appointments", CalendarDays],
     ...(clinicalAccess ? [["chart", "Dental Chart", Activity], ["clinical", "Clinical Notes", Stethoscope]] as const : []),
     ["plans", "Treatment Plans", ClipboardList],
-    ["finance", "Finance", FileText],
+    ...(documentAccess ? [["documents", "Documents", FileText]] as const : []),
+    ...(financeAccess ? [["finance", "Finance", FileText]] as const : []),
   ] as const;
 
   return <div className="space-y-4"><div className="rounded-3xl border p-5" style={cardStyle}><div className="flex flex-col md:flex-row md:items-center gap-4"><div className="w-14 h-14 rounded-2xl grid place-items-center text-white text-xl font-bold" style={{ background: "var(--primary)" }}>{patient.first_name[0]}{patient.last_name[0]}</div><div className="flex-1"><div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-bold" style={{ fontFamily: "'Cormorant Garamond', serif", color: "var(--primary)" }}>{patient.first_name} {patient.last_name}</h2><StatusBadge tone="success">{patient.patient_no}</StatusBadge>{patient.allergies && patient.allergies.toLowerCase() !== "none known" && <StatusBadge tone="danger">Allergy: {patient.allergies}</StatusBadge>}</div><div className="text-xs mt-1" style={muted}>{patient.phone || "No phone"} · {patient.email || "No email"} · DOB {patient.date_of_birth || "not recorded"}</div></div><Link to="/admin/patients" className="text-xs font-semibold" style={{ color: "var(--accent)" }}>Back to Patients</Link></div></div>
@@ -805,7 +808,8 @@ export function ClinicPatientWorkspace() {
   {tab === "chart" && clinicalAccess && <DentalChart patientId={patientId} />}
   {tab === "plans" && <TreatmentPlansTab patientId={patientId} />}
   {tab === "clinical" && clinicalAccess && <ClinicalNotesTab patientId={patientId} />}
-  {tab === "finance" && <FinanceTab patientId={patientId} />}
+  {tab === "documents" && documentAccess && <DocumentsTab patientId={patientId} />}
+  {tab === "finance" && financeAccess && <FinanceTab patientId={patientId} />}
   </div>;
 }
 
