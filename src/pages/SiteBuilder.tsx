@@ -1,5 +1,5 @@
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Check, Eye, ImagePlus, Palette, Save, SlidersHorizontal, Type, Upload } from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarClock, Check, Eye, ImagePlus, Palette, Save, SlidersHorizontal, Type, Upload } from "lucide-react";
 import ClinicThemeRenderer from "@/components/ClinicThemeRenderer";
 import { useAuth } from "@/auth/AuthContext";
 import { saasRepository } from "@/saas/repository";
@@ -15,6 +15,19 @@ const colorFields: Array<[keyof NonNullable<SiteTokens["colors"]>, string]> = [
   ["text","Text"],
   ["muted","Muted text"],
 ];
+
+const BOOKING_DEFAULTS = {
+  days: [1, 2, 3, 4, 5],
+  start: "09:00",
+  end: "17:00",
+  slotMinutes: 30,
+  leadTimeHours: 2,
+  horizonDays: 90,
+};
+
+const DAY_LABELS = [
+  [0, "Sun"], [1, "Mon"], [2, "Tue"], [3, "Wed"], [4, "Thu"], [5, "Fri"], [6, "Sat"],
+] as const;
 
 const sectionNames: Record<string,string> = {
   hero:"Hero",
@@ -47,6 +60,8 @@ export default function SiteBuilder() {
     address: "",
     city: "",
     country: "",
+    timezone: "UTC",
+    currency: "USD",
   });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -74,6 +89,8 @@ export default function SiteBuilder() {
         address: activeClinic.address || "",
         city: activeClinic.city || "",
         country: activeClinic.country || "",
+        timezone: activeClinic.timezone || "UTC",
+        currency: activeClinic.currency || "USD",
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load website settings.");
@@ -83,6 +100,10 @@ export default function SiteBuilder() {
   useEffect(() => { void load(); }, [activeClinicId, activeClinic?.id]);
 
   const selectedTheme = themes.find(theme=>theme.key===settings?.theme_key) ?? null;
+  const bookingSettings = {
+    ...BOOKING_DEFAULTS,
+    ...((settings?.content as any)?.bookingSettings || {}),
+  };
   const effectiveTokens = useMemo(() => deepMergeTokens(selectedTheme?.default_tokens || {}, settings?.tokens || {}), [selectedTheme, settings?.tokens]);
 
   const previewSite = useMemo<PublicClinicSite | null>(() => {
@@ -158,6 +179,26 @@ export default function SiteBuilder() {
     });
   };
 
+  const updateBookingSetting = (key: keyof typeof BOOKING_DEFAULTS, value: string | number | number[]) => {
+    setSettings(current => current ? {
+      ...current,
+      content: {
+        ...(current.content || {}),
+        bookingSettings: {
+          ...BOOKING_DEFAULTS,
+          ...(current.content?.bookingSettings || {}),
+          [key]: value,
+        },
+      },
+    } : current);
+  };
+
+  const toggleBookingDay = (day: number) => {
+    const days = Array.isArray(bookingSettings.days) ? bookingSettings.days.map(Number) : BOOKING_DEFAULTS.days;
+    const next = days.includes(day) ? days.filter((value: number) => value !== day) : [...days, day].sort((a, b) => a - b);
+    updateBookingSetting("days", next);
+  };
+
   const toggleSection = (key: string) => {
     setSettings(current => {
       if (!current) return current;
@@ -198,6 +239,19 @@ export default function SiteBuilder() {
   };
 
   const save = async () => {
+    const toMinutes = (value: string) => {
+      const [hour, minute] = value.split(":").map(Number);
+      return hour * 60 + minute;
+    };
+    if (!Array.isArray(bookingSettings.days) || bookingSettings.days.length === 0) {
+      setError("Select at least one booking day.");
+      return;
+    }
+    if (toMinutes(String(bookingSettings.start)) >= toMinutes(String(bookingSettings.end))) {
+      setError("Booking closing time must be later than opening time.");
+      return;
+    }
+
     setSaving(true);
     setMessage("");
     setError("");
@@ -367,6 +421,49 @@ export default function SiteBuilder() {
           </section>
 
           <section className="rounded-2xl border bg-white p-5">
+            <div className="flex items-center gap-2 font-bold"><CalendarClock size={17}/>Online booking hours</div>
+            <p className="mt-1 text-xs text-slate-500">These rules drive the live availability shown to patients and are validated again on the server.</p>
+
+            <div className="mt-4">
+              <div className="text-xs font-semibold">Working days</div>
+              <div className="mt-2 grid grid-cols-7 gap-1.5">
+                {DAY_LABELS.map(([day,label]) => {
+                  const active = (bookingSettings.days || []).map(Number).includes(day);
+                  return <button
+                    type="button"
+                    key={day}
+                    onClick={()=>toggleBookingDay(day)}
+                    className={`rounded-lg border px-1 py-2 text-[11px] font-semibold transition ${active ? "border-violet-300 bg-violet-50 text-violet-700" : "bg-white text-slate-500"}`}
+                    aria-pressed={active}
+                  >{label}</button>;
+                })}
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <label className="text-xs font-semibold">Opens
+                <input type="time" value={String(bookingSettings.start)} onChange={e=>updateBookingSetting("start",e.target.value)} className="mt-1.5 w-full px-3 py-2.5 rounded-xl border" />
+              </label>
+              <label className="text-xs font-semibold">Closes
+                <input type="time" value={String(bookingSettings.end)} onChange={e=>updateBookingSetting("end",e.target.value)} className="mt-1.5 w-full px-3 py-2.5 rounded-xl border" />
+              </label>
+              <label className="text-xs font-semibold">Slot interval
+                <select value={Number(bookingSettings.slotMinutes)} onChange={e=>updateBookingSetting("slotMinutes",Number(e.target.value))} className="mt-1.5 w-full px-3 py-2.5 rounded-xl border bg-white">
+                  {[15,20,30,45,60].map(value=><option key={value} value={value}>{value} minutes</option>)}
+                </select>
+              </label>
+              <label className="text-xs font-semibold">Minimum notice
+                <select value={Number(bookingSettings.leadTimeHours)} onChange={e=>updateBookingSetting("leadTimeHours",Number(e.target.value))} className="mt-1.5 w-full px-3 py-2.5 rounded-xl border bg-white">
+                  {[0,1,2,4,12,24,48,72].map(value=><option key={value} value={value}>{value === 0 ? "None" : value + " hours"}</option>)}
+                </select>
+              </label>
+              <label className="text-xs font-semibold col-span-2">Booking horizon · {Number(bookingSettings.horizonDays)} days
+                <input type="range" min="7" max="365" step="7" value={Number(bookingSettings.horizonDays)} onChange={e=>updateBookingSetting("horizonDays",Number(e.target.value))} className="mt-2 w-full" />
+              </label>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border bg-white p-5">
             <div className="font-bold">Sections</div>
             <div className="space-y-2 mt-4">
               {settings.sections.map((section,index)=><div key={section.key} className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-50">
@@ -387,6 +484,8 @@ export default function SiteBuilder() {
               <input value={clinicDraft.address} onChange={e=>setClinicDraft({...clinicDraft,address:e.target.value})} placeholder="Address" className="px-3 py-2.5 rounded-xl border col-span-2" />
               <input value={clinicDraft.city} onChange={e=>setClinicDraft({...clinicDraft,city:e.target.value})} placeholder="City" className="px-3 py-2.5 rounded-xl border" />
               <input value={clinicDraft.country} onChange={e=>setClinicDraft({...clinicDraft,country:e.target.value})} placeholder="Country" className="px-3 py-2.5 rounded-xl border" />
+              <input value={clinicDraft.timezone} onChange={e=>setClinicDraft({...clinicDraft,timezone:e.target.value})} placeholder="Timezone, e.g. Asia/Hebron" className="px-3 py-2.5 rounded-xl border" />
+              <input value={clinicDraft.currency} onChange={e=>setClinicDraft({...clinicDraft,currency:e.target.value.toUpperCase()})} maxLength={3} placeholder="Currency" className="px-3 py-2.5 rounded-xl border uppercase" />
             </div>
           </section>
 
