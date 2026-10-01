@@ -533,13 +533,244 @@ function AppointmentsTab({ patientId }: { patientId: string }) {
 }
 
 
+function DocumentsTab({ patientId }: { patientId: string }) {
+  const { role } = useAuth();
+  const canManage = role === "admin" || role === "dentist" || role === "receptionist";
+  const canDelete = role === "admin" || role === "dentist";
+  const [documents, setDocuments] = useState<PatientDocument[]>([]);
+  const [showUpload, setShowUpload] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [title, setTitle] = useState("");
+  const [documentType, setDocumentType] = useState("other");
+  const [patientVisible, setPatientVisible] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const load = async () => {
+    setError("");
+    try {
+      setDocuments(await clinicRepository.listPatientDocuments(patientId, undefined, false));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to load documents.");
+    }
+  };
+
+  useEffect(() => { void load(); }, [patientId]);
+
+  const upload = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!file || !canManage) return;
+    setSaving(true);
+    setError("");
+    try {
+      await clinicRepository.uploadPatientDocument({
+        patient_id: patientId,
+        file,
+        title: title.trim() || file.name,
+        document_type: documentType,
+        patient_visible: patientVisible,
+      });
+      setFile(null);
+      setTitle("");
+      setDocumentType("other");
+      setPatientVisible(false);
+      setShowUpload(false);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to upload document.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openDocument = async (document: PatientDocument) => {
+    setError("");
+    try {
+      const url = await clinicRepository.createPatientDocumentUrl(document.storage_path);
+      if (!url) throw new Error("Document link could not be created.");
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to open document.");
+    }
+  };
+
+  const toggleVisibility = async (document: PatientDocument) => {
+    setError("");
+    try {
+      await clinicRepository.updatePatientDocumentVisibility(document.id, !document.patient_visible);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update document visibility.");
+    }
+  };
+
+  const removeDocument = async (document: PatientDocument) => {
+    setSaving(true);
+    setError("");
+    try {
+      await clinicRepository.deletePatientDocument(document);
+      setPendingDelete("");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to delete document.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const formatSize = (bytes?: number | null) => {
+    if (!bytes) return "Size unavailable";
+    if (bytes < 1024 * 1024) return Math.max(1, Math.round(bytes / 1024)) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+        <div>
+          <h3 className="font-semibold">Patient Documents</h3>
+          <p className="text-xs mt-1" style={muted}>Private clinical files with explicit patient-portal visibility.</p>
+        </div>
+        {canManage && (
+          <button onClick={() => setShowUpload((value) => !value)} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold text-white" style={{ background: "var(--primary)" }}>
+            <Upload size={14} />Upload Document
+          </button>
+        )}
+      </div>
+
+      {error && <div role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+
+      {showUpload && canManage && (
+        <form onSubmit={upload} className="rounded-2xl border p-4 grid md:grid-cols-2 gap-4" style={cardStyle}>
+          <label className="text-xs font-semibold">
+            File
+            <input
+              required
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.webp,.dcm,.docx,application/pdf,image/jpeg,image/png,image/webp,application/dicom,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              onChange={(event) => {
+                const selected = event.target.files?.[0] || null;
+                setFile(selected);
+                if (selected && !title) setTitle(selected.name.replace(/\.[^.]+$/, ""));
+              }}
+              className="mt-1.5 block w-full rounded-xl border bg-transparent px-3 py-2 text-sm"
+            />
+            <span className="mt-1 block text-[11px] font-normal" style={muted}>PDF, images, DICOM or DOCX · max 25 MB</span>
+          </label>
+          <label className="text-xs font-semibold">
+            Title
+            <input required maxLength={160} value={title} onChange={(event) => setTitle(event.target.value)} className="mt-1.5 w-full rounded-xl border bg-transparent px-3 py-2.5 text-sm" placeholder="Panoramic X-ray · Oct 2026" />
+          </label>
+          <label className="text-xs font-semibold">
+            Type
+            <select value={documentType} onChange={(event) => setDocumentType(event.target.value)} className="mt-1.5 w-full rounded-xl border bg-transparent px-3 py-2.5 text-sm">
+              <option value="xray">X-ray / Imaging</option>
+              <option value="consent">Consent</option>
+              <option value="referral">Referral</option>
+              <option value="prescription">Prescription</option>
+              <option value="treatment_plan">Treatment plan</option>
+              <option value="invoice">Invoice / Receipt</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-3 rounded-xl border px-3 py-3 text-sm">
+            <input type="checkbox" checked={patientVisible} onChange={(event) => setPatientVisible(event.target.checked)} />
+            <span><b className="block text-xs">Visible in Patient Portal</b><span className="text-[11px]" style={muted}>Only enable files the patient should be able to open.</span></span>
+          </label>
+          <div className="md:col-span-2 flex justify-end gap-2">
+            <button type="button" onClick={() => setShowUpload(false)} className="rounded-xl border px-3 py-2.5 text-sm">Cancel</button>
+            <button disabled={saving || !file} className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50" style={{ background: "var(--accent)" }}>
+              {saving ? "Uploading..." : "Upload securely"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {documents.length === 0 ? (
+        <EmptyState icon={FileText} title="No documents" description="X-rays, consent forms, referrals and other patient files will appear here." />
+      ) : (
+        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
+          {documents.map((document) => (
+            <div key={document.id} className="rounded-2xl border p-4" style={cardStyle}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="w-10 h-10 rounded-xl grid place-items-center" style={{ background: "var(--secondary)", color: "var(--primary)" }}><FileText size={18} /></div>
+                <StatusBadge tone={document.patient_visible ? "success" : "neutral"}>{document.patient_visible ? "Patient visible" : "Staff only"}</StatusBadge>
+              </div>
+              <div className="mt-4 font-semibold">{document.title}</div>
+              <div className="mt-1 text-xs capitalize" style={muted}>{document.document_type.replaceAll("_", " ")} · {formatSize(document.file_size)}</div>
+              <div className="mt-1 text-[11px]" style={muted}>{new Date(document.created_at).toLocaleString()}</div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button onClick={() => void openDocument(document)} className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold">
+                  <Eye size={13} />Open
+                </button>
+                {canManage && (
+                  <button onClick={() => void toggleVisibility(document)} className="rounded-xl border px-3 py-2 text-xs font-semibold">
+                    {document.patient_visible ? "Make staff only" : "Share to portal"}
+                  </button>
+                )}
+                {canDelete && (
+                  pendingDelete === document.id ? (
+                    <>
+                      <button disabled={saving} onClick={() => void removeDocument(document)} className="rounded-xl bg-red-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Confirm delete</button>
+                      <button onClick={() => setPendingDelete("")} className="rounded-xl border px-3 py-2 text-xs">Cancel</button>
+                    </>
+                  ) : (
+                    <button onClick={() => setPendingDelete(document.id)} className="rounded-xl p-2 text-red-600 hover:bg-red-50" aria-label={"Delete " + document.title}><Trash2 size={14} /></button>
+                  )
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FinanceTab({ patientId }: { patientId: string }) {
+  const { activeClinic } = useAuth();
+  const currency = activeClinic?.currency || "USD";
   const [invoices, setInvoices] = useState<Invoice[]>([]);
-  useEffect(() => { clinicRepository.listInvoices(patientId).then(setInvoices); }, [patientId]);
+  useEffect(() => { void clinicRepository.listInvoices(patientId).then(setInvoices); }, [patientId]);
   const total = invoices.reduce((sum, item) => sum + Number(item.total), 0);
   const paid = invoices.reduce((sum, item) => sum + Number(item.paid_total), 0);
   const balance = invoices.reduce((sum, item) => sum + Number(item.balance_due), 0);
-  return <div className="space-y-4"><div className="grid grid-cols-3 gap-3">{[["Invoiced",total],["Paid",paid],["Balance",balance]].map(([label,value]) => <div key={String(label)} className="rounded-2xl border p-4" style={cardStyle}><div className="text-xs" style={muted}>{label}</div><div className="text-xl font-bold mt-1">${Number(value).toLocaleString()}</div></div>)}</div>{invoices.length === 0 ? <EmptyState icon={FileText} title="No invoices" description="Invoices linked to this patient will appear here." /> : <div className="rounded-2xl border overflow-hidden" style={cardStyle}><div className="overflow-x-auto"><table className="w-full min-w-[650px] text-sm"><thead><tr className="text-left border-b" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}><th className="px-4 py-3">Invoice</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Total</th><th className="px-4 py-3">Paid</th><th className="px-4 py-3">Balance</th></tr></thead><tbody>{invoices.map((invoice) => <tr key={invoice.id} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}><td className="px-4 py-3 font-semibold">{invoice.invoice_no}</td><td className="px-4 py-3"><StatusBadge tone={invoice.status === "paid" ? "success" : invoice.status === "partially_paid" ? "warning" : "primary"}>{invoice.status.replaceAll("_", " ")}</StatusBadge></td><td className="px-4 py-3">${Number(invoice.total).toLocaleString()}</td><td className="px-4 py-3">${Number(invoice.paid_total).toLocaleString()}</td><td className="px-4 py-3 font-bold">${Number(invoice.balance_due).toLocaleString()}</td></tr>)}</tbody></table></div></div>}</div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid sm:grid-cols-3 gap-3">
+        {[["Invoiced", total], ["Paid", paid], ["Balance", balance]].map(([label, value]) => (
+          <div key={String(label)} className="rounded-2xl border p-4" style={cardStyle}>
+            <div className="text-xs" style={muted}>{label}</div>
+            <div className="text-xl font-bold mt-1">{formatMoney(Number(value), currency)}</div>
+          </div>
+        ))}
+      </div>
+      {invoices.length === 0 ? (
+        <EmptyState icon={FileText} title="No invoices" description="Invoices linked to this patient will appear here." />
+      ) : (
+        <div className="rounded-2xl border overflow-hidden" style={cardStyle}>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[700px] text-sm">
+              <thead><tr className="text-left border-b" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}><th className="px-4 py-3">Invoice</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Total</th><th className="px-4 py-3">Paid</th><th className="px-4 py-3">Balance</th><th className="px-4 py-3">Due</th></tr></thead>
+              <tbody>{invoices.map((invoice) => (
+                <tr key={invoice.id} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}>
+                  <td className="px-4 py-3 font-semibold">{invoice.invoice_no}</td>
+                  <td className="px-4 py-3"><StatusBadge tone={invoice.status === "paid" ? "success" : invoice.status === "partially_paid" ? "warning" : "primary"}>{invoice.status.replaceAll("_", " ")}</StatusBadge></td>
+                  <td className="px-4 py-3">{formatMoney(Number(invoice.total), currency)}</td>
+                  <td className="px-4 py-3">{formatMoney(Number(invoice.paid_total), currency)}</td>
+                  <td className="px-4 py-3 font-bold">{formatMoney(Number(invoice.balance_due), currency)}</td>
+                  <td className="px-4 py-3 text-xs" style={muted}>{invoice.due_at ? new Date(invoice.due_at).toLocaleDateString() : "—"}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function ClinicPatientWorkspace() {
