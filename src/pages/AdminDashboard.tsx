@@ -22,9 +22,9 @@ const ADMIN_NAV = [
   { icon: ClipboardList, label: "Treatment Plans", path: "/admin/treatment-plans", section: "clinic" },
   { icon: Stethoscope, label: "Doctors", path: "/admin/doctors", section: "clinic" },
   { icon: Briefcase, label: "Treatments", path: "/admin/services", section: "clinic" },
-  { icon: Package, label: "Inventory", path: "/admin/inventory", section: "clinic" },
-  { icon: Palette, label: "Website Builder", path: "/admin/site-builder", section: "marketing" },
-  { icon: FileText, label: "Accounting", path: "/accounting", section: "finance" },
+  { icon: Package, label: "Inventory", path: "/admin/inventory", section: "clinic", feature: "inventory" },
+  { icon: Palette, label: "Website Builder", path: "/admin/site-builder", section: "marketing", feature: "website" },
+  { icon: FileText, label: "Accounting", path: "/accounting", section: "finance", feature: "accounting" },
 ];
 
 const SECTIONS = { main: "Operations", clinic: "Clinical", marketing: "Marketing", finance: "Finance", system: "System" };
@@ -32,7 +32,7 @@ const SECTIONS = { main: "Operations", clinic: "Clinical", marketing: "Marketing
 function AdminSidebar({ open, setOpen }: { open: boolean; setOpen: (v: boolean) => void }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { signOut, demoMode, role, isSuperAdmin, memberships, activeClinic, activeClinicId, setActiveClinicId } = useAuth();
+  const { signOut, demoMode, role, isSuperAdmin, memberships, activeClinic, activeClinicId, setActiveClinicId, entitlements, hasFeature } = useAuth();
   const visiblePaths: Record<string, string[]> = {
     dentist: ["/admin", "/admin/patients", "/admin/appointments", "/admin/treatment-plans", "/admin/inventory"],
     receptionist: ["/admin", "/admin/patients", "/admin/appointments", "/admin/leads", "/admin/doctors", "/admin/services", "/accounting"],
@@ -40,7 +40,12 @@ function AdminSidebar({ open, setOpen }: { open: boolean; setOpen: (v: boolean) 
   };
   const canSee = (path: string) => role === "admin" || !role || (visiblePaths[role]?.includes(path) ?? false);
   const grouped = Object.entries(SECTIONS).map(([key, label]) => ({
-    label, items: ADMIN_NAV.filter(n => n.section === key && canSee(n.path))
+    label,
+    items: ADMIN_NAV.filter((item) =>
+      item.section === key
+      && canSee(item.path)
+      && (!("feature" in item) || !item.feature || hasFeature(item.feature))
+    ),
   })).filter((group) => group.items.length > 0);
 
   return (
@@ -61,6 +66,20 @@ function AdminSidebar({ open, setOpen }: { open: boolean; setOpen: (v: boolean) 
           </Link>
           <button onClick={() => setOpen(false)} className="text-white/60 lg:hidden"><X size={16} /></button>
         </div>
+
+        {entitlements?.plan && (
+          <div className="px-3 pt-3">
+            <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-wider font-semibold" style={{ color:"rgba(255,255,255,.38)" }}>Plan</div>
+              <div className="mt-0.5 flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-white">{entitlements.plan.name}</span>
+                <span className={`text-[10px] font-semibold ${entitlements.usable ? "text-emerald-300" : "text-amber-300"}`}>
+                  {entitlements.subscription_status.replaceAll("_"," ")}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {memberships.length > 1 && (
           <div className="px-3 pt-3">
@@ -137,10 +156,6 @@ function AdminHeader({ title, setOpen }: { title: string; setOpen: (v: boolean) 
       <h1 className="font-semibold text-base" style={{ color: "var(--foreground)" }}>{title}</h1>
       <div className="flex-1" />
       <div className="flex items-center gap-2">
-        <button className="relative p-1.5 rounded-xl border" style={{ borderColor: "var(--border)" }}>
-          <Bell size={15} style={{ color: "var(--foreground)" }} />
-          <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-red-500" />
-        </button>
         <div className="hidden md:flex items-center gap-2 text-sm" style={{ color: "var(--foreground)" }}>
           <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white"
             style={{ background: "var(--accent)" }}>{initials}</div>
