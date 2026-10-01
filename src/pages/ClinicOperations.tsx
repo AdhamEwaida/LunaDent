@@ -188,14 +188,333 @@ function DentalChart({ patientId }: { patientId: string }) {
 }
 
 function TreatmentPlansTab({ patientId }: { patientId: string }) {
+  const { role, activeClinic } = useAuth();
+  const currency = activeClinic?.currency || "USD";
+  const canManage = role === "admin" || role === "dentist";
   const [plans, setPlans] = useState<TreatmentPlan[]>([]);
-  const [show, setShow] = useState(false);
+  const [items, setItems] = useState<TreatmentPlanItem[]>([]);
+  const [treatments, setTreatments] = useState<TreatmentCatalogItem[]>([]);
+  const [selectedPlanId, setSelectedPlanId] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const [showAddItem, setShowAddItem] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
   const [title, setTitle] = useState("");
-  const [total, setTotal] = useState("");
-  const load = async () => setPlans(await clinicRepository.listTreatmentPlans(patientId));
-  useEffect(() => { void load(); }, [patientId]);
-  const create = async (event: FormEvent) => { event.preventDefault(); await clinicRepository.createTreatmentPlan({ patient_id: patientId, title, estimated_total: Number(total) || 0, status: "draft" }); setTitle(""); setTotal(""); setShow(false); await load(); };
-  return <div className="space-y-4"><div className="flex justify-end"><button onClick={() => setShow((v) => !v)} className="px-3 py-2 rounded-xl text-sm font-semibold" style={{ background: "var(--primary)", color: "white" }}><Plus size={13} className="inline mr-1" />New Plan</button></div>{show && <form onSubmit={create} className="rounded-2xl border p-4 grid md:grid-cols-[1fr_180px_auto] gap-3" style={cardStyle}><input required value={title} onChange={(e) => setTitle(e.target.value)} className="px-3 py-2.5 rounded-xl border bg-transparent" placeholder="Treatment plan title" /><input value={total} onChange={(e) => setTotal(e.target.value)} type="number" min="0" className="px-3 py-2.5 rounded-xl border bg-transparent" placeholder="Estimated total" /><button className="px-4 py-2 rounded-xl text-sm font-semibold" style={{ background: "var(--accent)", color: "white" }}>Create</button></form>}{plans.length === 0 ? <EmptyState icon={ClipboardList} title="No treatment plans" description="Create a plan to track proposed and completed dental care." /> : <div className="grid md:grid-cols-2 gap-3">{plans.map((plan) => <div key={plan.id} className="rounded-2xl border p-4" style={cardStyle}><div className="flex justify-between gap-3"><div><div className="font-semibold">{plan.title}</div><div className="text-xs mt-1" style={muted}>{plan.notes || "No notes"}</div></div><StatusBadge tone={plan.status === "completed" ? "success" : plan.status === "approved" || plan.status === "in_progress" ? "primary" : "warning"}>{plan.status.replaceAll("_", " ")}</StatusBadge></div><div className="mt-4 pt-3 border-t flex justify-between text-sm" style={{ borderColor: "var(--border)" }}><span style={muted}>Estimated total</span><span className="font-bold">${Number(plan.estimated_total).toLocaleString()}</span></div></div>)}</div>}</div>;
+  const [notes, setNotes] = useState("");
+  const [itemForm, setItemForm] = useState({
+    treatment_id: "",
+    tooth_no: "",
+    description: "",
+    quantity: "1",
+    unit_price: "0",
+    discount: "0",
+  });
+
+  const loadPlans = async (preferredId?: string) => {
+    const rows = await clinicRepository.listTreatmentPlans(patientId);
+    setPlans(rows);
+    setSelectedPlanId((current) => {
+      const candidate = preferredId || current;
+      return rows.some((plan) => plan.id === candidate) ? candidate : rows[0]?.id || "";
+    });
+  };
+
+  const loadItems = async (planId: string) => {
+    if (!planId) {
+      setItems([]);
+      return;
+    }
+    setItems(await clinicRepository.listTreatmentPlanItems(planId));
+  };
+
+  useEffect(() => {
+    void Promise.all([
+      loadPlans(),
+      clinicRepository.listTreatments().then(setTreatments),
+    ]).catch((err) => setError(err instanceof Error ? err.message : "Unable to load treatment plans."));
+  }, [patientId]);
+
+  useEffect(() => {
+    void loadItems(selectedPlanId).catch((err) => setError(err instanceof Error ? err.message : "Unable to load plan items."));
+  }, [selectedPlanId]);
+
+  const selectedPlan = plans.find((plan) => plan.id === selectedPlanId) || null;
+
+  const create = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!canManage) return;
+    setSaving(true);
+    setError("");
+    try {
+      const created = await clinicRepository.createTreatmentPlan({
+        patient_id: patientId,
+        title: title.trim(),
+        notes: notes.trim() || null,
+        status: "draft",
+      });
+      setTitle("");
+      setNotes("");
+      setShowCreate(false);
+      await loadPlans(created.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to create treatment plan.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addItem = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!selectedPlan || !canManage) return;
+    setSaving(true);
+    setError("");
+    try {
+      await clinicRepository.createTreatmentPlanItem({
+        treatment_plan_id: selectedPlan.id,
+        treatment_id: itemForm.treatment_id || null,
+        tooth_no: itemForm.tooth_no ? Number(itemForm.tooth_no) : null,
+        description: itemForm.description,
+        quantity: Number(itemForm.quantity),
+        unit_price: Number(itemForm.unit_price),
+        discount: Number(itemForm.discount) || 0,
+      });
+      setItemForm({ treatment_id: "", tooth_no: "", description: "", quantity: "1", unit_price: "0", discount: "0" });
+      setShowAddItem(false);
+      await Promise.all([loadItems(selectedPlan.id), loadPlans(selectedPlan.id)]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to add treatment item.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateItemStatus = async (item: TreatmentPlanItem, status: TreatmentPlanItem["status"]) => {
+    setError("");
+    try {
+      await clinicRepository.updateTreatmentPlanItemStatus(item.id, status);
+      await Promise.all([loadItems(selectedPlanId), loadPlans(selectedPlanId)]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update treatment item.");
+    }
+  };
+
+  const deleteItem = async (item: TreatmentPlanItem) => {
+    setError("");
+    try {
+      await clinicRepository.deleteTreatmentPlanItem(item.id);
+      await Promise.all([loadItems(selectedPlanId), loadPlans(selectedPlanId)]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to remove treatment item.");
+    }
+  };
+
+  const transitions: Record<TreatmentPlan["status"], TreatmentPlan["status"][]> = {
+    draft: ["proposed", "cancelled"],
+    proposed: ["draft", "approved", "cancelled"],
+    approved: ["in_progress", "cancelled"],
+    in_progress: ["completed", "cancelled"],
+    completed: [],
+    cancelled: [],
+  };
+
+  const changePlanStatus = async (status: TreatmentPlan["status"]) => {
+    if (!selectedPlan) return;
+    setSaving(true);
+    setError("");
+    try {
+      await clinicRepository.setTreatmentPlanStatus(selectedPlan.id, status);
+      await loadPlans(selectedPlan.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update treatment plan status.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const selectTreatment = (treatmentId: string) => {
+    const treatment = treatments.find((row) => row.id === treatmentId);
+    setItemForm((current) => ({
+      ...current,
+      treatment_id: treatmentId,
+      description: treatment?.name_en || current.description,
+      unit_price: treatment ? String(treatment.default_price) : current.unit_price,
+    }));
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+        <div>
+          <h3 className="font-semibold">Treatment Plans</h3>
+          <p className="text-xs mt-1" style={muted}>Build itemized care plans, track approval, and follow each procedure through completion.</p>
+        </div>
+        {canManage && (
+          <button onClick={() => setShowCreate((value) => !value)} className="px-3 py-2 rounded-xl text-sm font-semibold" style={{ background: "var(--primary)", color: "white" }}>
+            <Plus size={13} className="inline mr-1" />New Plan
+          </button>
+        )}
+      </div>
+
+      {error && <div role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+
+      {showCreate && canManage && (
+        <form onSubmit={create} className="rounded-2xl border p-4 grid md:grid-cols-[1fr_1fr_auto] gap-3" style={cardStyle}>
+          <input required maxLength={160} value={title} onChange={(event) => setTitle(event.target.value)} className="px-3 py-2.5 rounded-xl border bg-transparent" placeholder="Treatment plan title" />
+          <input maxLength={500} value={notes} onChange={(event) => setNotes(event.target.value)} className="px-3 py-2.5 rounded-xl border bg-transparent" placeholder="Plan notes (optional)" />
+          <button disabled={saving} className="px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-50" style={{ background: "var(--accent)", color: "white" }}>
+            {saving ? "Creating..." : "Create"}
+          </button>
+        </form>
+      )}
+
+      {plans.length === 0 ? (
+        <EmptyState icon={ClipboardList} title="No treatment plans" description={canManage ? "Create the first itemized care plan for this patient." : "No treatment plans have been created for this patient."} />
+      ) : (
+        <div className="grid xl:grid-cols-[300px_1fr] gap-4 items-start">
+          <div className="space-y-2">
+            {plans.map((plan) => (
+              <button
+                key={plan.id}
+                onClick={() => setSelectedPlanId(plan.id)}
+                className="w-full rounded-2xl border p-4 text-left"
+                style={{
+                  ...cardStyle,
+                  boxShadow: selectedPlanId === plan.id ? "0 0 0 2px var(--primary)" : undefined,
+                }}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="font-semibold">{plan.title}</div>
+                  <StatusBadge tone={plan.status === "completed" ? "success" : plan.status === "cancelled" ? "danger" : plan.status === "approved" || plan.status === "in_progress" ? "primary" : "warning"}>
+                    {plan.status.replaceAll("_", " ")}
+                  </StatusBadge>
+                </div>
+                <div className="mt-3 text-lg font-bold">{formatMoney(Number(plan.estimated_total), currency)}</div>
+                <div className="text-[11px] mt-1" style={muted}>{new Date(plan.created_at).toLocaleDateString()}</div>
+              </button>
+            ))}
+          </div>
+
+          {selectedPlan && (
+            <div className="rounded-2xl border overflow-hidden" style={cardStyle}>
+              <div className="p-4 border-b flex flex-col lg:flex-row lg:items-start justify-between gap-3" style={{ borderColor: "var(--border)" }}>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h4 className="text-lg font-bold">{selectedPlan.title}</h4>
+                    <StatusBadge tone={selectedPlan.status === "completed" ? "success" : selectedPlan.status === "cancelled" ? "danger" : selectedPlan.status === "approved" || selectedPlan.status === "in_progress" ? "primary" : "warning"}>
+                      {selectedPlan.status.replaceAll("_", " ")}
+                    </StatusBadge>
+                  </div>
+                  <p className="text-xs mt-1" style={muted}>{selectedPlan.notes || "No plan notes."}</p>
+                  {selectedPlan.approved_at && <p className="text-[11px] mt-1" style={muted}>Approved {new Date(selectedPlan.approved_at).toLocaleString()}</p>}
+                </div>
+                {canManage && (
+                  <div className="flex flex-wrap gap-2">
+                    {transitions[selectedPlan.status].map((status) => (
+                      <button key={status} disabled={saving} onClick={() => void changePlanStatus(status)} className="px-3 py-2 rounded-xl border text-xs font-semibold capitalize disabled:opacity-50">
+                        {status.replaceAll("_", " ")}
+                      </button>
+                    ))}
+                    {!["completed", "cancelled"].includes(selectedPlan.status) && (
+                      <button onClick={() => setShowAddItem((value) => !value)} className="px-3 py-2 rounded-xl text-xs font-semibold text-white" style={{ background: "var(--primary)" }}>
+                        <Plus size={12} className="inline mr-1" />Add item
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {showAddItem && canManage && !["completed", "cancelled"].includes(selectedPlan.status) && (
+                <form onSubmit={addItem} className="p-4 border-b grid md:grid-cols-2 xl:grid-cols-6 gap-3" style={{ borderColor: "var(--border)" }}>
+                  <label className="text-xs font-semibold xl:col-span-2">Treatment
+                    <select value={itemForm.treatment_id} onChange={(event) => selectTreatment(event.target.value)} className="mt-1.5 w-full rounded-xl border bg-transparent px-3 py-2.5 text-sm">
+                      <option value="">Custom procedure</option>
+                      {treatments.map((treatment) => <option key={treatment.id} value={treatment.id}>{treatment.name_en}</option>)}
+                    </select>
+                  </label>
+                  <label className="text-xs font-semibold xl:col-span-2">Description
+                    <input required maxLength={240} value={itemForm.description} onChange={(event) => setItemForm({ ...itemForm, description: event.target.value })} className="mt-1.5 w-full rounded-xl border bg-transparent px-3 py-2.5 text-sm" />
+                  </label>
+                  <label className="text-xs font-semibold">Tooth
+                    <input type="number" min="11" max="48" value={itemForm.tooth_no} onChange={(event) => setItemForm({ ...itemForm, tooth_no: event.target.value })} className="mt-1.5 w-full rounded-xl border bg-transparent px-3 py-2.5 text-sm" placeholder="e.g. 26" />
+                  </label>
+                  <label className="text-xs font-semibold">Qty
+                    <input required type="number" min="0.01" step="0.01" value={itemForm.quantity} onChange={(event) => setItemForm({ ...itemForm, quantity: event.target.value })} className="mt-1.5 w-full rounded-xl border bg-transparent px-3 py-2.5 text-sm" />
+                  </label>
+                  <label className="text-xs font-semibold">Unit price
+                    <input required type="number" min="0" step="0.01" value={itemForm.unit_price} onChange={(event) => setItemForm({ ...itemForm, unit_price: event.target.value })} className="mt-1.5 w-full rounded-xl border bg-transparent px-3 py-2.5 text-sm" />
+                  </label>
+                  <label className="text-xs font-semibold">Discount
+                    <input type="number" min="0" step="0.01" value={itemForm.discount} onChange={(event) => setItemForm({ ...itemForm, discount: event.target.value })} className="mt-1.5 w-full rounded-xl border bg-transparent px-3 py-2.5 text-sm" />
+                  </label>
+                  <div className="md:col-span-2 xl:col-span-4 flex items-end justify-end gap-2">
+                    <button type="button" onClick={() => setShowAddItem(false)} className="rounded-xl border px-3 py-2.5 text-sm">Cancel</button>
+                    <button disabled={saving} className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50" style={{ background: "var(--accent)" }}>
+                      {saving ? "Saving..." : "Add procedure"}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {items.length === 0 ? (
+                <div className="p-8 text-center text-sm" style={muted}>No procedures in this plan yet.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[900px] text-sm">
+                    <thead>
+                      <tr className="text-left border-b" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>
+                        <th className="px-4 py-3">Procedure</th>
+                        <th className="px-4 py-3">Tooth</th>
+                        <th className="px-4 py-3">Qty</th>
+                        <th className="px-4 py-3">Unit price</th>
+                        <th className="px-4 py-3">Discount</th>
+                        <th className="px-4 py-3">Net</th>
+                        <th className="px-4 py-3">Status</th>
+                        {canManage && <th className="px-4 py-3"></th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((item) => (
+                        <tr key={item.id} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}>
+                          <td className="px-4 py-3 font-semibold">{item.description}</td>
+                          <td className="px-4 py-3">{item.tooth_no || "—"}</td>
+                          <td className="px-4 py-3">{Number(item.quantity)}</td>
+                          <td className="px-4 py-3">{formatMoney(Number(item.unit_price), currency)}</td>
+                          <td className="px-4 py-3">{formatMoney(Number(item.discount), currency)}</td>
+                          <td className="px-4 py-3 font-bold">{formatMoney(Math.max(Number(item.quantity) * Number(item.unit_price) - Number(item.discount), 0), currency)}</td>
+                          <td className="px-4 py-3">
+                            {canManage && !["completed", "cancelled"].includes(selectedPlan.status) ? (
+                              <select value={item.status} onChange={(event) => void updateItemStatus(item, event.target.value as TreatmentPlanItem["status"])} className="rounded-lg border bg-transparent px-2 py-1.5 text-xs">
+                                <option value="planned">Planned</option>
+                                <option value="in_progress">In progress</option>
+                                <option value="completed">Completed</option>
+                                <option value="cancelled">Cancelled</option>
+                              </select>
+                            ) : <StatusBadge tone={item.status === "completed" ? "success" : item.status === "cancelled" ? "danger" : "primary"}>{item.status.replaceAll("_", " ")}</StatusBadge>}
+                          </td>
+                          {canManage && <td className="px-4 py-3 text-right">
+                            {selectedPlan.status === "draft" && (
+                              <button onClick={() => void deleteItem(item)} className="p-2 rounded-lg text-red-600 hover:bg-red-50" aria-label={"Remove " + item.description}>
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </td>}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <div className="p-4 border-t flex flex-wrap justify-end gap-6 text-sm" style={{ borderColor: "var(--border)" }}>
+                <div><span style={muted}>Discounts </span><b>{formatMoney(Number(selectedPlan.discount_total), currency)}</b></div>
+                <div><span style={muted}>Plan total </span><b className="text-lg">{formatMoney(Number(selectedPlan.estimated_total), currency)}</b></div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ClinicalNotesTab({ patientId }: { patientId: string }) {
