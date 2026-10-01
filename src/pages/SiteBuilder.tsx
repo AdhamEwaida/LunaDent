@@ -4,7 +4,7 @@ import ClinicThemeRenderer from "@/components/ClinicThemeRenderer";
 import { useAuth } from "@/auth/AuthContext";
 import { saasRepository } from "@/saas/repository";
 import { supabase } from "@/lib/supabase";
-import type { BookingSettings, ClinicSiteSettings, PublicClinicSite, SiteTokens, ThemeDefinition } from "@/saas/types";
+import type { BookingSettings, ClinicBusinessHour, ClinicSiteSettings, PublicClinicSite, SiteTokens, ThemeDefinition } from "@/saas/types";
 
 const colorFields: Array<[keyof NonNullable<SiteTokens["colors"]>, string]> = [
   ["primary","Primary"],
@@ -78,11 +78,12 @@ function deepMergeTokens(base: SiteTokens, custom: SiteTokens): SiteTokens {
 }
 
 export default function SiteBuilder() {
-  const { activeClinicId, activeClinic, activeClinicRole } = useAuth();
+  const { activeClinicId, activeClinic, activeClinicRole, entitlements, hasFeature } = useAuth();
   const [themes, setThemes] = useState<ThemeDefinition[]>([]);
   const [settings, setSettings] = useState<ClinicSiteSettings | null>(null);
   const [doctors, setDoctors] = useState<PublicClinicSite["doctors"]>([]);
   const [treatments, setTreatments] = useState<PublicClinicSite["treatments"]>([]);
+  const [businessHours, setBusinessHours] = useState<ClinicBusinessHour[]>([]);
   const [clinicDraft, setClinicDraft] = useState({
     name: "",
     phone: "",
@@ -102,14 +103,16 @@ export default function SiteBuilder() {
     if (!activeClinicId || !activeClinic || !supabase) return;
     setError("");
     try {
-      const [themeRows, siteSettings, doctorsRes, treatmentsRes] = await Promise.all([
+      const [themeRows, siteSettings, hoursRows, doctorsRes, treatmentsRes] = await Promise.all([
         saasRepository.listThemes(),
         saasRepository.getSiteSettings(activeClinicId),
+        saasRepository.listBusinessHours(activeClinicId),
         supabase.from("doctors").select("id,display_name,specialty,bio_en").eq("clinic_id",activeClinicId).eq("active",true).order("display_name"),
         supabase.from("treatments").select("id,code,name_en,name_ar,description_en,duration_minutes,default_price").eq("clinic_id",activeClinicId).eq("active",true).order("name_en"),
       ]);
       setThemes(themeRows);
       setSettings(siteSettings);
+      setBusinessHours(hoursRows);
       setDoctors(doctorsRes.data ?? []);
       setTreatments(treatmentsRes.data ?? []);
       setClinicDraft({
@@ -231,10 +234,10 @@ export default function SiteBuilder() {
     } : current);
   };
 
-  const toggleBookingDay = (day: number) => {
-    const days = Array.isArray(bookingSettings.days) ? bookingSettings.days.map(Number) : BOOKING_DEFAULTS.days;
-    const next = days.includes(day) ? days.filter((value: number) => value !== day) : [...days, day].sort((a, b) => a - b);
-    updateBookingSetting("days", next);
+  const updateBusinessHour = (weekday: number, patch: Partial<ClinicBusinessHour>) => {
+    setBusinessHours((current) =>
+      current.map((row) => row.weekday === weekday ? { ...row, ...patch } : row)
+    );
   };
 
   const toggleSection = (key: string) => {
@@ -278,16 +281,19 @@ export default function SiteBuilder() {
 
   const save = async () => {
     const toMinutes = (value: string) => {
-      const [hour, minute] = value.split(":").map(Number);
+      const [hour, minute] = value.slice(0,5).split(":").map(Number);
       return hour * 60 + minute;
     };
-    if (!Array.isArray(bookingSettings.days) || bookingSettings.days.length === 0) {
-      setError("Select at least one booking day.");
+    const enabledHours = businessHours.filter((row) => row.enabled);
+    if (enabledHours.length === 0) {
+      setError("Enable at least one booking day.");
       return;
     }
-    if (toMinutes(String(bookingSettings.start)) >= toMinutes(String(bookingSettings.end))) {
-      setError("Booking closing time must be later than opening time.");
-      return;
+    for (const row of enabledHours) {
+      if (!row.open_time || !row.close_time || toMinutes(row.open_time) >= toMinutes(row.close_time)) {
+        setError("Every enabled booking day needs a valid opening and closing time.");
+        return;
+      }
     }
 
     setSaving(true);
@@ -297,8 +303,9 @@ export default function SiteBuilder() {
       await Promise.all([
         saasRepository.updateSiteSettings(activeClinicId, settings),
         saasRepository.updateClinic(activeClinicId, clinicDraft),
+        saasRepository.saveBusinessHours(activeClinicId, businessHours),
       ]);
-      setMessage("Website settings saved.");
+      setMessage("Website, branding, and booking hours saved.");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to save website.");
@@ -332,9 +339,20 @@ export default function SiteBuilder() {
           <section className="rounded-2xl border bg-white p-5">
             <div className="flex items-center gap-2 font-bold"><Palette size={17}/>Theme</div>
             <div className="grid grid-cols-3 gap-2 mt-4">
-              {themes.map(theme=><button key={theme.key} onClick={()=>chooseTheme(theme)} className={`rounded-xl border p-3 text-left ${settings.theme_key===theme.key?"ring-2 ring-violet-400":""}`}>
-                <div className="font-semibold text-sm">{theme.name}</div><div className="text-[10px] mt-1 text-slate-500">{theme.premium?"Premium":"Included"}</div>
-              </button>)}
+              {themes.map((theme) => {
+                const locked = theme.key !== "modern" && !hasFeature("all_themes");
+                return <button
+                  type="button"
+                  key={theme.key}
+                  disabled={locked}
+                  onClick={()=>chooseTheme(theme)}
+                  className={`rounded-xl border p-3 text-left transition ${settings.theme_key===theme.key?"ring-2 ring-violet-400":""} ${locked?"cursor-not-allowed bg-slate-50 opacity-60":"hover:border-violet-300"}`}
+                  title={locked ? `${entitlements?.plan?.name || "Current"} plan includes the Modern theme only` : undefined}
+                >
+                  <div className="font-semibold text-sm">{theme.name}</div>
+                  <div className="text-[10px] mt-1 text-slate-500">{locked ? "Upgrade to unlock" : theme.premium ? "Premium" : "Included"}</div>
+                </button>;
+              })}
             </div>
           </section>
 
@@ -453,43 +471,66 @@ export default function SiteBuilder() {
 
           <section className="rounded-2xl border bg-white p-5">
             <div className="flex items-center gap-2 font-bold"><CalendarClock size={17}/>Online booking hours</div>
-            <p className="mt-1 text-xs text-slate-500">These rules drive the live availability shown to patients and are validated again on the server.</p>
+            <p className="mt-1 text-xs text-slate-500">Set each day independently. These hours are validated by the booking server before a request can be submitted.</p>
 
-            <div className="mt-4">
-              <div className="text-xs font-semibold">Working days</div>
-              <div className="mt-2 grid grid-cols-7 gap-1.5">
-                {DAY_LABELS.map(([day,label]) => {
-                  const active = (bookingSettings.days || []).map(Number).includes(day);
-                  return <button
-                    type="button"
-                    key={day}
-                    onClick={()=>toggleBookingDay(day)}
-                    className={`rounded-lg border px-1 py-2 text-[11px] font-semibold transition ${active ? "border-violet-300 bg-violet-50 text-violet-700" : "bg-white text-slate-500"}`}
-                    aria-pressed={active}
-                  >{label}</button>;
-                })}
-              </div>
+            <div className="mt-4 space-y-2">
+              {DAY_LABELS.map(([day,label]) => {
+                const row = businessHours.find((item) => item.weekday === day) || {
+                  clinic_id: activeClinicId,
+                  weekday: day,
+                  enabled: false,
+                  open_time: "09:00",
+                  close_time: "17:00",
+                  slot_minutes: 30,
+                };
+                return <div key={day} className={`grid grid-cols-[72px_1fr] gap-3 rounded-xl border p-3 ${row.enabled?"bg-white":"bg-slate-50"}`}>
+                  <label className="flex items-center gap-2 text-xs font-semibold">
+                    <input
+                      type="checkbox"
+                      checked={row.enabled}
+                      onChange={(event)=>updateBusinessHour(day,{ enabled:event.target.checked, open_time:row.open_time || "09:00", close_time:row.close_time || "17:00" })}
+                    />
+                    {label}
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <input
+                      type="time"
+                      disabled={!row.enabled}
+                      value={(row.open_time || "09:00").slice(0,5)}
+                      onChange={(event)=>updateBusinessHour(day,{ open_time:event.target.value })}
+                      className="min-w-0 rounded-lg border px-2 py-2 text-xs disabled:bg-slate-100"
+                      aria-label={label+" opening time"}
+                    />
+                    <input
+                      type="time"
+                      disabled={!row.enabled}
+                      value={(row.close_time || "17:00").slice(0,5)}
+                      onChange={(event)=>updateBusinessHour(day,{ close_time:event.target.value })}
+                      className="min-w-0 rounded-lg border px-2 py-2 text-xs disabled:bg-slate-100"
+                      aria-label={label+" closing time"}
+                    />
+                    <select
+                      disabled={!row.enabled}
+                      value={row.slot_minutes}
+                      onChange={(event)=>updateBusinessHour(day,{ slot_minutes:Number(event.target.value) })}
+                      className="min-w-0 rounded-lg border bg-white px-2 py-2 text-xs disabled:bg-slate-100"
+                      aria-label={label+" slot interval"}
+                    >
+                      {[15,20,30,45,60].map((value)=><option key={value} value={value}>{value} min</option>)}
+                    </select>
+                  </div>
+                </div>;
+              })}
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-3">
-              <label className="text-xs font-semibold">Opens
-                <input type="time" value={String(bookingSettings.start)} onChange={e=>updateBookingSetting("start",e.target.value)} className="mt-1.5 w-full px-3 py-2.5 rounded-xl border" />
-              </label>
-              <label className="text-xs font-semibold">Closes
-                <input type="time" value={String(bookingSettings.end)} onChange={e=>updateBookingSetting("end",e.target.value)} className="mt-1.5 w-full px-3 py-2.5 rounded-xl border" />
-              </label>
-              <label className="text-xs font-semibold">Slot interval
-                <select value={Number(bookingSettings.slotMinutes)} onChange={e=>updateBookingSetting("slotMinutes",Number(e.target.value))} className="mt-1.5 w-full px-3 py-2.5 rounded-xl border bg-white">
-                  {[15,20,30,45,60].map(value=><option key={value} value={value}>{value} minutes</option>)}
-                </select>
-              </label>
               <label className="text-xs font-semibold">Minimum notice
                 <select value={Number(bookingSettings.leadTimeHours)} onChange={e=>updateBookingSetting("leadTimeHours",Number(e.target.value))} className="mt-1.5 w-full px-3 py-2.5 rounded-xl border bg-white">
                   {[0,1,2,4,12,24,48,72].map(value=><option key={value} value={value}>{value === 0 ? "None" : value + " hours"}</option>)}
                 </select>
               </label>
-              <label className="text-xs font-semibold col-span-2">Booking horizon · {Number(bookingSettings.horizonDays)} days
-                <input type="range" min="7" max="365" step="7" value={Number(bookingSettings.horizonDays)} onChange={e=>updateBookingSetting("horizonDays",Number(e.target.value))} className="mt-2 w-full" />
+              <label className="text-xs font-semibold">Booking horizon · {Number(bookingSettings.horizonDays)} days
+                <input type="range" min="7" max="365" step="7" value={Number(bookingSettings.horizonDays)} onChange={e=>updateBookingSetting("horizonDays",Number(e.target.value))} className="mt-3 w-full" />
               </label>
             </div>
           </section>
