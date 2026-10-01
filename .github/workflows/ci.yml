@@ -37,6 +37,17 @@ jobs:
       - name: TypeScript
         run: npx tsc --noEmit
 
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Check Supabase Edge Functions
+        run: |
+          deno check supabase/functions/manage-clinic-users/index.ts
+          deno check supabase/functions/manage-saas/index.ts
+          deno check supabase/functions/public-booking/index.ts
+
       - name: Production build
         run: npm run build
 
