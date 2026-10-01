@@ -194,6 +194,14 @@ Deno.serve(async (req: Request) => {
       }
       const { error } = await admin.from("clinics").update({ status }).eq("id", clinicId);
       if (error) throw error;
+      await admin.from("audit_logs").insert({
+        clinic_id: clinicId,
+        actor_user_id: identity.user.id,
+        action: "update",
+        entity_type: "clinic",
+        entity_id: clinicId,
+        metadata: { changed_fields: ["status"] },
+      });
       return Response.json({ ok: true }, { headers: cors });
     }
 
@@ -222,6 +230,14 @@ Deno.serve(async (req: Request) => {
         .select("id,status,trial_ends_at,current_period_end")
         .single();
       if (error) throw error;
+      await admin.from("audit_logs").insert({
+        clinic_id: clinicId,
+        actor_user_id: identity.user.id,
+        action: "update",
+        entity_type: "subscription",
+        entity_id: subscription.id,
+        metadata: { changed_fields: ["status","trial_ends_at","current_period_end"] },
+      });
       return Response.json({ ok: true, subscription }, { headers: cors });
     }
 
@@ -264,6 +280,14 @@ Deno.serve(async (req: Request) => {
         if (domainError) throw domainError;
       }
 
+      await admin.from("audit_logs").insert({
+        clinic_id: clinicId,
+        actor_user_id: identity.user.id,
+        action: "update",
+        entity_type: "subscription",
+        entity_id: clinicId,
+        metadata: { changed_fields: ["plan_id"] },
+      });
       return Response.json({ ok: true, plan_code: plan.code }, { headers: cors });
     }
 
