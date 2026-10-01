@@ -6,8 +6,6 @@ import { clinicRepository } from "@/clinic/repository";
 import { saasRepository } from "@/saas/repository";
 import type { PublicClinicSite } from "@/saas/types";
 
-const cardStyle = { background: "var(--card)", borderColor: "var(--border)" };
-const muted = { color: "var(--muted-foreground)" };
 
 function useClinicSignupContext() {
   const { clinicSlug = "" } = useParams();
@@ -222,7 +220,7 @@ export function CompletePatientProfile() {
       .finally(() => active && setChecking(false));
 
     return () => { active = false; };
-  }, [clinicSlug, site?.clinic.id, user, role, navigate]);
+  }, [clinicSlug, site, user, role, navigate]);
 
   if (!clinicSlug) return <Navigate to="/" replace />;
   if (loadingClinic || authLoading || checking) return <div className="min-h-screen grid place-items-center bg-slate-50 text-slate-500">Preparing patient profile...</div>;
