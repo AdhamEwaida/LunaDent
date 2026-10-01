@@ -166,6 +166,7 @@ export type Database = {
         Row: {
           clinic_id: string
           created_at: string
+          doctor_id: string | null
           email: string | null
           full_name: string
           id: string
@@ -181,6 +182,7 @@ export type Database = {
         Insert: {
           clinic_id: string
           created_at?: string
+          doctor_id?: string | null
           email?: string | null
           full_name: string
           id?: string
@@ -196,6 +198,7 @@ export type Database = {
         Update: {
           clinic_id?: string
           created_at?: string
+          doctor_id?: string | null
           email?: string | null
           full_name?: string
           id?: string
@@ -222,6 +225,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "clinics"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "booking_requests_doctor_tenant_fkey"
+            columns: ["clinic_id", "doctor_id"]
+            isOneToOne: false
+            referencedRelation: "doctors"
+            referencedColumns: ["clinic_id", "id"]
           },
           {
             foreignKeyName: "booking_requests_treatment_id_fkey"
