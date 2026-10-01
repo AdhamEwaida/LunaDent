@@ -58,7 +58,7 @@ export default function ClinicOnboarding() {
       setLogoUrl(site.logo_url || null);
       setHeroUrl(site.hero_image_url || null);
     }).catch(err => setError(err instanceof Error ? err.message : "Unable to load onboarding."));
-  }, [activeClinicId, activeClinic?.id]);
+  }, [activeClinicId, activeClinic]);
 
   const selected = useMemo(() => themes.find(theme => theme.key === selectedTheme) ?? null, [themes, selectedTheme]);
 
