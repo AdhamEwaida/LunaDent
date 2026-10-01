@@ -75,6 +75,62 @@ export type SiteSection = {
   enabled: boolean;
 };
 
+export type HeroSiteContent = {
+  eyebrow?: string;
+  title?: string;
+  subtitle?: string;
+  primaryCta?: string;
+  secondaryCta?: string;
+};
+
+export type SectionSiteContent = {
+  eyebrow?: string;
+  title?: string;
+  subtitle?: string;
+};
+
+export type JourneyStep = {
+  step: string;
+  title: string;
+  text: string;
+};
+
+export type BookingSettings = {
+  days?: number[];
+  start?: string;
+  end?: string;
+  slotMinutes?: number;
+  leadTimeHours?: number;
+  horizonDays?: number;
+};
+
+export type ClinicSiteContent = {
+  hero?: HeroSiteContent;
+  services?: SectionSiteContent;
+  doctors?: SectionSiteContent;
+  journey?: {
+    title?: string;
+    steps?: JourneyStep[];
+  };
+  booking?: {
+    title?: string;
+    subtitle?: string;
+    button?: string;
+  };
+  contact?: {
+    description?: string;
+  };
+  bookingSettings?: BookingSettings;
+  [key: string]: unknown;
+};
+
+export type SiteNavigationItem = {
+  label?: string;
+  href?: string;
+  enabled?: boolean;
+  [key: string]: unknown;
+};
+
 export type ClinicSiteSettings = {
   clinic_id: string;
   theme_key: string;
@@ -88,9 +144,9 @@ export type ClinicSiteSettings = {
   hero_image_url?: string | null;
   tokens: SiteTokens;
   sections: SiteSection[];
-  content: Record<string, any>;
-  assets: Record<string, any>;
-  navigation: Array<Record<string, any>>;
+  content: ClinicSiteContent;
+  assets: Record<string, unknown>;
+  navigation: SiteNavigationItem[];
   updated_at: string;
 };
 
@@ -117,6 +173,14 @@ export type Subscription = {
   plan?: SaasPlan | null;
 };
 
+export type ClinicSiteSummary = Pick<ClinicSiteSettings, "theme_key" | "published" | "custom_domain">;
+export type SubscriptionWithPlan = Omit<Subscription, "plan"> & { plan?: SaasPlan | null };
+
+export type ClinicCommercialRow = Clinic & {
+  subscription?: SubscriptionWithPlan | SubscriptionWithPlan[] | null;
+  site?: ClinicSiteSummary | ClinicSiteSummary[] | null;
+};
+
 export type PublicClinicSite = {
   clinic: Clinic;
   settings: ClinicSiteSettings;
@@ -137,7 +201,6 @@ export type PublicClinicSite = {
     default_price: number;
   }>;
 };
-
 
 export type ClinicEntitlements = {
   clinic_id: string;
