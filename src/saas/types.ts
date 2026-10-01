@@ -146,5 +146,5 @@ export type ClinicEntitlements = {
   subscription_status: Subscription["status"] | "missing";
   trial_ends_at?: string | null;
   current_period_end?: string | null;
-  plan: SaasPlan | null;
+  plan: (Omit<SaasPlan, "id"> & { id?: string }) | null;
 };
