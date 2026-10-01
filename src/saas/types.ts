@@ -104,6 +104,16 @@ export type BookingSettings = {
   horizonDays?: number;
 };
 
+export type ClinicBusinessHour = {
+  clinic_id: string;
+  weekday: number;
+  enabled: boolean;
+  open_time?: string | null;
+  close_time?: string | null;
+  slot_minutes: number;
+  updated_at?: string;
+};
+
 export type ClinicSiteContent = {
   hero?: HeroSiteContent;
   services?: SectionSiteContent;
