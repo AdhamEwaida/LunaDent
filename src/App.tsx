@@ -19,6 +19,7 @@ const ClinicBooking = lazy(() => import("@/pages/ClinicBooking"));
 const ClinicOnboarding = lazy(() => import("@/pages/ClinicOnboarding"));
 const PrivacyPolicy = lazy(() => import("@/pages/Legal").then((module) => ({ default: module.PrivacyPolicy })));
 const TermsOfService = lazy(() => import("@/pages/Legal").then((module) => ({ default: module.TermsOfService })));
+const AuthRecovery = lazy(() => import("@/pages/AuthRecovery"));
 
 function NotFound() {
   return (
@@ -80,6 +81,7 @@ export default function App() {
               <Route path="/c/:clinicSlug/patient/payments" element={<PatientPortalLive />} />
               <Route path="/c/:clinicSlug/patient/documents" element={<PatientPortalLive />} />
 
+              <Route path="/auth/reset-password" element={<AuthRecovery />} />
               <Route path="/staff/login" element={<StaffLogin />} />
               <Route path="/staff/change-password" element={
                 <ProtectedRoute roles={[...staffRoles]}>
