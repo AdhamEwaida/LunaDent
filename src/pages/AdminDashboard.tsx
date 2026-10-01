@@ -5,7 +5,9 @@ import {
   Briefcase,
   Calendar,
   ClipboardList,
+  CreditCard,
   FileText,
+  History,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -31,12 +33,14 @@ import {
 } from "@/pages/ClinicOperations";
 import { useAuth } from "@/auth/AuthContext";
 import SiteBuilder from "@/pages/SiteBuilder";
+import ClinicPlan from "@/pages/ClinicPlan";
+import ClinicAuditLog from "@/pages/ClinicAuditLog";
 
 type NavItem = {
   icon: typeof LayoutDashboard;
   label: string;
   path: string;
-  section: "main" | "clinic" | "marketing" | "finance";
+  section: "main" | "clinic" | "marketing" | "finance" | "admin";
   feature?: string;
 };
 
@@ -51,6 +55,8 @@ const ADMIN_NAV: NavItem[] = [
   { icon: Package, label: "Inventory", path: "/admin/inventory", section: "clinic", feature: "inventory" },
   { icon: Palette, label: "Website Builder", path: "/admin/site-builder", section: "marketing", feature: "website" },
   { icon: FileText, label: "Accounting", path: "/accounting", section: "finance", feature: "accounting" },
+  { icon: CreditCard, label: "Plan & Usage", path: "/admin/plan", section: "admin" },
+  { icon: History, label: "Audit Log", path: "/admin/audit-log", section: "admin" },
 ];
 
 const SECTIONS = {
@@ -58,6 +64,7 @@ const SECTIONS = {
   clinic: "Clinical",
   marketing: "Marketing",
   finance: "Finance",
+  admin: "Administration",
 } as const;
 
 const PAGE_TITLES: Record<string, string> = {
@@ -71,6 +78,8 @@ const PAGE_TITLES: Record<string, string> = {
   "/admin/services": "Treatments",
   "/admin/users": "Users & Access",
   "/admin/site-builder": "Website Builder",
+  "/admin/plan": "Plan & Usage",
+  "/admin/audit-log": "Audit Log",
 };
 
 function AdminSidebar({ open, setOpen }: { open: boolean; setOpen: (value: boolean) => void }) {
@@ -311,6 +320,8 @@ export default function AdminDashboardPage() {
     if (path === "/admin/services") return <ClinicServices />;
     if (path === "/admin/users") return <ClinicUsers />;
     if (path === "/admin/site-builder") return <SiteBuilder />;
+    if (path === "/admin/plan") return <ClinicPlan />;
+    if (path === "/admin/audit-log") return <ClinicAuditLog />;
     return <ClinicDashboard />;
   };
 
