@@ -155,6 +155,8 @@ export type BookingRequest = {
   full_name: string;
   email?: string | null;
   phone: string;
+  treatment_id?: string | null;
+  doctor_id?: string | null;
   requested_treatment?: string | null;
   requested_doctor?: string | null;
   preferred_date?: string | null;
