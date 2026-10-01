@@ -368,8 +368,8 @@ function ReportsPanel({ invoices, payments, currency, clinicName }: { invoices: 
     return (!from || day >= from) && (!to || day <= to);
   };
 
-  const filteredInvoices = useMemo(() => invoices.filter((invoice) => within(invoice.issued_at)), [invoices, from, to]);
-  const filteredPayments = useMemo(() => payments.filter((payment) => within(payment.paid_at)), [payments, from, to]);
+  const filteredInvoices = invoices.filter((invoice) => within(invoice.issued_at));
+  const filteredPayments = payments.filter((payment) => within(payment.paid_at));
 
   const total = filteredInvoices.reduce((sum, invoice) => sum + Number(invoice.total), 0);
   const paid = filteredPayments.reduce((sum, payment) => sum + Number(payment.amount), 0);
