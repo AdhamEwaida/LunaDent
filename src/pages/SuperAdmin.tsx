@@ -1,15 +1,12 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Building2, CheckCircle2, ExternalLink, LayoutTemplate, LogOut, Plus, RefreshCw, ShieldCheck, Sparkles, UsersRound } from "lucide-react";
+import { Building2, ExternalLink, LayoutTemplate, LogOut, Plus, RefreshCw, ShieldCheck, Sparkles, UsersRound } from "lucide-react";
 import { saasRepository } from "@/saas/repository";
 import { supabase } from "@/lib/supabase";
-import type { Clinic, SaasPlan, ThemeDefinition } from "@/saas/types";
+import type { Clinic, ClinicCommercialRow, SaasPlan, ThemeDefinition } from "@/saas/types";
 import { useAuth } from "@/auth/AuthContext";
 
-type ClinicRow = Clinic & {
-  subscription?: any;
-  site?: { theme_key?: string; published?: boolean; custom_domain?: string | null } | null;
-};
+type ClinicRow = ClinicCommercialRow;
 
 type LeadRow = {
   id: string;
