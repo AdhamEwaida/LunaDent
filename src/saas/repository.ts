@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import type {
   Clinic,
+  ClinicBusinessHour,
   ClinicCommercialRow,
   ClinicMembership,
   ClinicSiteSettings,
@@ -83,6 +84,36 @@ export const saasRepository = {
     const { data, error } = await db.from("clinic_site_settings").select("*").eq("clinic_id", clinicId).single();
     if (error) throw error;
     return data as ClinicSiteSettings;
+  },
+
+  async listBusinessHours(clinicId: string): Promise<ClinicBusinessHour[]> {
+    const db = requireSupabase();
+    const { data, error } = await db
+      .from("clinic_business_hours")
+      .select("*")
+      .eq("clinic_id", clinicId)
+      .order("weekday");
+    if (error) throw error;
+    return (data ?? []) as ClinicBusinessHour[];
+  },
+
+  async saveBusinessHours(clinicId: string, rows: ClinicBusinessHour[]): Promise<ClinicBusinessHour[]> {
+    const db = requireSupabase();
+    const payload = rows.map((row) => ({
+      clinic_id: clinicId,
+      weekday: row.weekday,
+      enabled: row.enabled,
+      open_time: row.enabled ? row.open_time : null,
+      close_time: row.enabled ? row.close_time : null,
+      slot_minutes: row.slot_minutes,
+    }));
+    const { data, error } = await db
+      .from("clinic_business_hours")
+      .upsert(payload, { onConflict: "clinic_id,weekday" })
+      .select("*")
+      .order("weekday");
+    if (error) throw error;
+    return (data ?? []) as ClinicBusinessHour[];
   },
 
   async updateSiteSettings(clinicId: string, patch: Partial<ClinicSiteSettings>): Promise<ClinicSiteSettings> {
