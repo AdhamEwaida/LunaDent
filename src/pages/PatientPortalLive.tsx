@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { CalendarDays, CreditCard, FileText, Home, LogOut, ReceiptText, ShieldCheck, Stethoscope, UserRound } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
@@ -162,7 +162,7 @@ export default function PatientPortalLive() {
       .finally(() => active && setLoading(false));
 
     return () => { active = false; };
-  }, [clinicSlug, user?.id]);
+  }, [clinicSlug, user]);
 
   if (!clinicSlug) {
     return (
