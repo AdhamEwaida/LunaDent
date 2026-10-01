@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import type {
   Clinic,
+  ClinicCommercialRow,
   ClinicMembership,
   ClinicSiteSettings,
   PublicClinicSite,
@@ -139,14 +140,14 @@ export const saasRepository = {
     return db.storage.from("clinic-assets").getPublicUrl(path).data.publicUrl;
   },
 
-  async listAllClinics(): Promise<Array<Clinic & { subscription?: any; site?: any }>> {
+  async listAllClinics(): Promise<ClinicCommercialRow[]> {
     const db = requireSupabase();
     const { data, error } = await db
       .from("clinics")
       .select("*, subscription:subscriptions(*,plan:plans(*)), site:clinic_site_settings(theme_key,published,custom_domain)")
       .order("created_at", { ascending: false });
     if (error) throw error;
-    return (data ?? []) as Array<Clinic & { subscription?: any; site?: any }>;
+    return (data ?? []) as unknown as ClinicCommercialRow[];
   },
 
   async createClinic(input: {
