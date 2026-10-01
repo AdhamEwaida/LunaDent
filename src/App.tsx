@@ -109,6 +109,8 @@ export default function App() {
                 </ProtectedRoute>
               } />
               <Route path="/admin/users" element={secureAdmin(["admin"])} />
+              <Route path="/admin/plan" element={secureAdmin(["admin"])} />
+              <Route path="/admin/audit-log" element={secureAdmin(["admin"])} />
 
               <Route path="/accounting" element={accountingElement} />
               <Route path="/accounting/invoices" element={accountingElement} />
