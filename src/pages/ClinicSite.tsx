@@ -6,12 +6,14 @@ import type { PublicClinicSite } from "@/saas/types";
 
 function upsertMeta(selector: string, attributes: Record<string, string>) {
   let element = document.head.querySelector<HTMLMetaElement>(selector);
+  const created = !element;
   if (!element) {
     element = document.createElement("meta");
     document.head.appendChild(element);
   }
+  const previous = element.getAttribute("content");
   for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, value);
-  return element;
+  return { element, created, previous };
 }
 
 export default function ClinicSite() {
@@ -45,12 +47,14 @@ export default function ClinicSite() {
     const themeColor = site.settings.tokens?.colors?.primary || "#2457C5";
 
     document.title = `${title} | Dental Clinic`;
-    const descriptionMeta = upsertMeta('meta[name="description"]', { name: "description", content: description });
-    const themeMeta = upsertMeta('meta[name="theme-color"]', { name: "theme-color", content: themeColor });
-    const ogTitle = upsertMeta('meta[property="og:title"]', { property: "og:title", content: title });
-    const ogDescription = upsertMeta('meta[property="og:description"]', { property: "og:description", content: description });
-    const ogType = upsertMeta('meta[property="og:type"]', { property: "og:type", content: "website" });
-    const ogUrl = upsertMeta('meta[property="og:url"]', { property: "og:url", content: pageUrl });
+    const metas = [
+      upsertMeta('meta[name="description"]', { name: "description", content: description }),
+      upsertMeta('meta[name="theme-color"]', { name: "theme-color", content: themeColor }),
+      upsertMeta('meta[property="og:title"]', { property: "og:title", content: title }),
+      upsertMeta('meta[property="og:description"]', { property: "og:description", content: description }),
+      upsertMeta('meta[property="og:type"]', { property: "og:type", content: "website" }),
+      upsertMeta('meta[property="og:url"]', { property: "og:url", content: pageUrl }),
+    ];
 
     let canonical = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]');
     const canonicalWasCreated = !canonical;
@@ -80,8 +84,10 @@ export default function ClinicSite() {
       else if (canonical) canonical.href = previousCanonical;
       if (faviconWasCreated) favicon?.remove();
       else if (favicon && previousFavicon) favicon.href = previousFavicon;
-      for (const meta of [descriptionMeta, themeMeta, ogTitle, ogDescription, ogType, ogUrl]) {
-        if (meta.dataset.lunadentTemporary === "true") meta.remove();
+      for (const meta of metas) {
+        if (meta.created) meta.element.remove();
+        else if (meta.previous === null) meta.element.removeAttribute("content");
+        else meta.element.setAttribute("content", meta.previous);
       }
     };
   }, [site]);
