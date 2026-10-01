@@ -3,18 +3,11 @@ import { Link, useParams } from "react-router-dom";
 import { CalendarDays, CheckCircle2, ChevronLeft, Clock3, MessageCircle, ShieldCheck, UserRound } from "lucide-react";
 import { saasRepository } from "@/saas/repository";
 import { supabase } from "@/lib/supabase";
-import type { PublicClinicSite } from "@/saas/types";
+import type { BookingSettings, PublicClinicSite } from "@/saas/types";
 
 type AvailabilityResponse = {
   slots: string[];
-  settings?: {
-    days: number[];
-    start: string;
-    end: string;
-    slotMinutes: number;
-    leadTimeHours: number;
-    horizonDays: number;
-  };
+  settings?: Required<BookingSettings>;
 };
 
 async function invokeBooking<T>(body: Record<string, unknown>): Promise<T> {
@@ -23,7 +16,9 @@ async function invokeBooking<T>(body: Record<string, unknown>): Promise<T> {
   if (data?.error) throw new Error(String(data.error));
   if (error) {
     let message = error.message || "Booking service is unavailable.";
-    const context = (error as any)?.context;
+    const context = typeof error === "object" && error !== null && "context" in error
+      ? (error as { context?: unknown }).context
+      : undefined;
     if (context instanceof Response) {
       try {
         const payload = await context.clone().json();
@@ -79,7 +74,7 @@ export default function ClinicBooking() {
       .then((data) => {
         if (!active) return;
         setSite(data);
-        const configuredHorizon = Number((data?.settings.content as any)?.bookingSettings?.horizonDays);
+        const configuredHorizon = Number(data?.settings.content.bookingSettings?.horizonDays);
         if (Number.isFinite(configuredHorizon) && configuredHorizon >= 7 && configuredHorizon <= 365) {
           setHorizonDays(configuredHorizon);
         }
@@ -124,7 +119,7 @@ export default function ClinicBooking() {
       .finally(() => active && setSlotsLoading(false));
 
     return () => { active = false; };
-  }, [site?.clinic.id, site?.clinic.slug, form.preferred_date, form.doctor_id, form.treatment_id]);
+  }, [site, form.preferred_date, form.doctor_id, form.treatment_id]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
