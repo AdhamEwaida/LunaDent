@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   Activity, AlertTriangle, CalendarDays, CheckCircle2, ChevronRight, ClipboardList,
   Eye, FileText, HeartPulse, Package, Plus, Search, Stethoscope, Trash2, Upload, UserRound, X
@@ -906,13 +906,137 @@ export function ClinicInventory() {
 
 
 export function ClinicBookingRequests() {
+  const navigate = useNavigate();
   const [items, setItems] = useState<BookingRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const load = async () => { setLoading(true); setItems(await clinicRepository.listBookingRequests()); setLoading(false); };
+  const [convertingId, setConvertingId] = useState("");
+  const [error, setError] = useState("");
+
+  const load = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      setItems(await clinicRepository.listBookingRequests());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to load booking requests.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => { void load(); }, []);
-  const setStatus = async (id: string, status: BookingRequest["status"]) => { await clinicRepository.updateBookingRequestStatus(id, status); await load(); };
+
+  const setStatus = async (id: string, status: BookingRequest["status"]) => {
+    setError("");
+    try {
+      await clinicRepository.updateBookingRequestStatus(id, status);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update booking request.");
+    }
+  };
+
+  const convert = async (item: BookingRequest) => {
+    setConvertingId(item.id);
+    setError("");
+    try {
+      const result = await clinicRepository.convertBookingRequest(item.id);
+      await load();
+      navigate("/admin/patients/" + result.patient_id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to create the appointment.");
+    } finally {
+      setConvertingId("");
+    }
+  };
+
   if (loading) return <div className="py-20 text-center" style={muted}>Loading booking requests...</div>;
-  return <div className="space-y-5"><div><h2 className="text-xl font-bold" style={{ color: "var(--primary)", fontFamily: "'Cormorant Garamond', serif" }}>Booking Requests</h2><p className="text-xs" style={muted}>Public booking requests are stored before WhatsApp opens, so reception can follow up reliably.</p></div>{items.length === 0 ? <EmptyState icon={CalendarDays} title="No booking requests" description="New public booking requests will appear here." /> : <div className="rounded-2xl border overflow-hidden" style={cardStyle}><div className="overflow-x-auto"><table className="w-full min-w-[980px] text-sm"><thead><tr className="text-left border-b" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}><th className="px-4 py-3">Patient</th><th className="px-4 py-3">Contact</th><th className="px-4 py-3">Requested Treatment</th><th className="px-4 py-3">Doctor</th><th className="px-4 py-3">Preferred Time</th><th className="px-4 py-3">Status</th></tr></thead><tbody>{items.map((item) => <tr key={item.id} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}><td className="px-4 py-3"><div className="font-semibold">{item.full_name}</div><div className="text-xs" style={muted}>{new Date(item.created_at).toLocaleString()}</div></td><td className="px-4 py-3"><div>{item.phone}</div><div className="text-xs" style={muted}>{item.email || "No email"}</div></td><td className="px-4 py-3">{item.requested_treatment || "General consultation"}</td><td className="px-4 py-3">{item.requested_doctor || "No preference"}</td><td className="px-4 py-3">{item.preferred_date || "Flexible"} {item.preferred_time || ""}</td><td className="px-4 py-3"><select value={item.status} onChange={(e) => void setStatus(item.id, e.target.value as BookingRequest["status"])} className="px-2 py-1.5 rounded-lg border bg-transparent text-xs"><option value="new">New</option><option value="contacted">Contacted</option><option value="converted">Converted</option><option value="closed">Closed</option></select></td></tr>)}</tbody></table></div></div>}</div>;
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-xl font-bold" style={{ color: "var(--primary)", fontFamily: "'Cormorant Garamond', serif" }}>Booking Requests</h2>
+        <p className="text-xs" style={muted}>Review public requests, follow up with the patient, then convert an accepted request into a patient record and scheduled appointment atomically.</p>
+      </div>
+
+      {error && <div role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+
+      {items.length === 0 ? (
+        <EmptyState icon={CalendarDays} title="No booking requests" description="New public booking requests will appear here." />
+      ) : (
+        <div className="rounded-2xl border overflow-hidden" style={cardStyle}>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1120px] text-sm">
+              <thead>
+                <tr className="text-left border-b" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>
+                  <th className="px-4 py-3">Patient</th>
+                  <th className="px-4 py-3">Contact</th>
+                  <th className="px-4 py-3">Treatment</th>
+                  <th className="px-4 py-3">Doctor</th>
+                  <th className="px-4 py-3">Preferred slot</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr key={item.id} className="border-b last:border-0 align-top" style={{ borderColor: "var(--border)" }}>
+                    <td className="px-4 py-3">
+                      <div className="font-semibold">{item.full_name}</div>
+                      <div className="text-xs mt-1" style={muted}>{new Date(item.created_at).toLocaleString()}</div>
+                      {item.notes && <div className="text-xs mt-2 max-w-xs" style={muted}>{item.notes}</div>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <a href={"tel:" + item.phone} className="font-medium hover:underline">{item.phone}</a>
+                      <div className="text-xs mt-1" style={muted}>{item.email || "No email"}</div>
+                    </td>
+                    <td className="px-4 py-3">{item.requested_treatment || "General consultation"}</td>
+                    <td className="px-4 py-3">{item.requested_doctor || "No preference"}</td>
+                    <td className="px-4 py-3">
+                      <div className="font-medium">{item.preferred_date || "Flexible"}</div>
+                      <div className="text-xs mt-1" style={muted}>{item.preferred_time || "No time selected"}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {item.status === "converted" ? (
+                        <StatusBadge tone="success">Converted</StatusBadge>
+                      ) : (
+                        <select
+                          value={item.status}
+                          onChange={(event) => void setStatus(item.id, event.target.value as BookingRequest["status"])}
+                          className="px-2 py-1.5 rounded-lg border bg-transparent text-xs"
+                        >
+                          <option value="new">New</option>
+                          <option value="contacted">Contacted</option>
+                          <option value="closed">Closed</option>
+                        </select>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {item.status === "converted" ? (
+                        <span className="text-xs" style={muted}>Patient + appointment created</span>
+                      ) : item.status === "closed" ? (
+                        <span className="text-xs" style={muted}>Closed without appointment</span>
+                      ) : (
+                        <button
+                          disabled={convertingId === item.id || !item.preferred_date || !item.preferred_time}
+                          onClick={() => void convert(item)}
+                          className="rounded-xl px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                          style={{ background: "var(--primary)" }}
+                          title={!item.preferred_date || !item.preferred_time ? "A preferred date and time are required before conversion." : undefined}
+                        >
+                          {convertingId === item.id ? "Creating..." : "Create appointment"}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function ClinicDashboard() {
