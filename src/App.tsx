@@ -109,12 +109,12 @@ export default function App() {
               <Route path="/accounting" element={accountingElement} />
               <Route path="/accounting/invoices" element={accountingElement} />
               <Route path="/accounting/create-invoice" element={accountingElement} />
-              <Route path="/accounting/invoice-print" element={accountingElement} />
               <Route path="/accounting/payments" element={accountingElement} />
-              <Route path="/accounting/payment-plans" element={accountingElement} />
-              <Route path="/accounting/statement" element={accountingElement} />
               <Route path="/accounting/reports" element={accountingElement} />
-              <Route path="/accounting/settings" element={accountingElement} />
+              <Route path="/accounting/invoice-print" element={<Navigate to="/accounting/invoices" replace />} />
+              <Route path="/accounting/payment-plans" element={<Navigate to="/accounting/invoices" replace />} />
+              <Route path="/accounting/statement" element={<Navigate to="/accounting/reports" replace />} />
+              <Route path="/accounting/settings" element={<Navigate to="/accounting" replace />} />
 
               <Route path="/booking" element={<Navigate to="/c/lunadent-demo/booking" replace />} />
               <Route path="/patient-portal/*" element={<Navigate to="/c/lunadent-demo/patient" replace />} />
