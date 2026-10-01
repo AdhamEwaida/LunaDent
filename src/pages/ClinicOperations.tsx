@@ -2,17 +2,25 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   Activity, AlertTriangle, CalendarDays, CheckCircle2, ChevronRight, ClipboardList,
-  FileText, HeartPulse, Package, Plus, Search, Stethoscope, UserRound, X
+  Eye, FileText, HeartPulse, Package, Plus, Search, Stethoscope, Trash2, Upload, UserRound, X
 } from "lucide-react";
 import { clinicRepository } from "@/clinic/repository";
 import { useAuth } from "@/auth/AuthContext";
 import type {
   Appointment, ClinicalNote, DentalChartEntry, InventoryItem, Patient, ToothCondition,
-  TreatmentPlan, Invoice, Doctor, TreatmentCatalogItem, BookingRequest
+  TreatmentPlan, TreatmentPlanItem, Invoice, Doctor, TreatmentCatalogItem, BookingRequest, PatientDocument
 } from "@/clinic/types";
 
 const cardStyle = { background: "var(--card)", borderColor: "var(--border)" };
 const muted = { color: "var(--muted-foreground)" };
+
+function formatMoney(value: number, currency = "USD") {
+  try {
+    return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 2 }).format(Number(value) || 0);
+  } catch {
+    return currency + " " + Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+  }
+}
 
 function StatusBadge({ children, tone = "neutral" }: { children: React.ReactNode; tone?: "neutral" | "success" | "warning" | "danger" | "primary" }) {
   const tones = {
