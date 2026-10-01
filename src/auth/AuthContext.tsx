@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { User } from "@supabase/supabase-js";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import type { AppRole } from "@/clinic/types";
-import type { Clinic, ClinicMembership, ClinicRole, PlatformRole } from "@/saas/types";
+import type { Clinic, ClinicEntitlements, ClinicMembership, ClinicRole, PlatformRole } from "@/saas/types";
 
 type AuthState = {
   user: User | null;
@@ -13,10 +13,14 @@ type AuthState = {
   activeClinicId: string | null;
   activeClinic: Clinic | null;
   activeClinicRole: ClinicRole | null;
+  entitlements: ClinicEntitlements | null;
+  entitlementsLoading: boolean;
   loading: boolean;
   accountActive: boolean;
   mustChangePassword: boolean;
   demoMode: boolean;
+  hasFeature: (feature: string) => boolean;
+  planLimit: (limit: string) => number | null;
   signIn: (email: string, password: string) => Promise<void>;
   signUpPatient: (input: { email: string; password: string; firstName: string; lastName: string; phone?: string; clinicSlug?: string }) => Promise<{ needsEmailConfirmation: boolean }>;
   changePassword: (newPassword: string) => Promise<void>;
@@ -37,10 +41,51 @@ const demoUser = {
   created_at: new Date(0).toISOString(),
 } as User;
 
+const demoEntitlements: ClinicEntitlements = {
+  clinic_id: "demo",
+  clinic_status: "active",
+  usable: true,
+  subscription_status: "active",
+  trial_ends_at: null,
+  current_period_end: null,
+  plan: {
+    id: "demo-enterprise",
+    code: "enterprise",
+    name: "Enterprise",
+    description: "Local preview",
+    price_monthly: 0,
+    currency: "USD",
+    active: true,
+    features: {
+      website: true,
+      patients: true,
+      appointments: true,
+      patient_portal: true,
+      inventory: true,
+      accounting: true,
+      custom_domain: true,
+      all_themes: true,
+      api: true,
+      multi_location: true,
+    },
+    limits: { staff: 500, dentists: 100, locations: 25, storage_gb: 500 },
+  },
+};
+
 function mapClinicRole(role: ClinicRole | null): AppRole | null {
   if (!role) return null;
   if (role === "clinic_owner") return "admin";
   return role;
+}
+
+async function fetchClinicEntitlements(clinicId: string): Promise<ClinicEntitlements | null> {
+  if (!supabase) return demoEntitlements;
+  const { data, error } = await supabase.functions.invoke("manage-clinic-users", {
+    body: { action: "context", clinic_id: clinicId },
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(String(data.error));
+  return (data?.entitlements as ClinicEntitlements | undefined) ?? null;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -49,8 +94,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [platformRole, setPlatformRole] = useState<PlatformRole | null>(isSupabaseConfigured ? null : "super_admin");
   const [memberships, setMemberships] = useState<ClinicMembership[]>([]);
   const [activeClinicIdState, setActiveClinicIdState] = useState<string | null>(null);
+  const [entitlements, setEntitlements] = useState<ClinicEntitlements | null>(isSupabaseConfigured ? null : demoEntitlements);
+  const [entitlementsLoading, setEntitlementsLoading] = useState(false);
   const [loading, setLoading] = useState(isSupabaseConfigured);
   const [accountActive, setAccountActive] = useState(!isSupabaseConfigured);
+
+  const loadEntitlements = useCallback(async (clinicId: string | null) => {
+    if (!clinicId) {
+      setEntitlements(null);
+      setEntitlementsLoading(false);
+      return;
+    }
+
+    setEntitlementsLoading(true);
+    try {
+      setEntitlements(await fetchClinicEntitlements(clinicId));
+    } catch {
+      setEntitlements(null);
+    } finally {
+      setEntitlementsLoading(false);
+    }
+  }, []);
 
   const loadContext = useCallback(async (nextUser: User | null) => {
     setUser(nextUser);
@@ -59,7 +123,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setPlatformRole(null);
       setMemberships([]);
       setActiveClinicIdState(null);
+      setEntitlements(null);
       setAccountActive(false);
+      setEntitlementsLoading(false);
       setLoading(false);
       return;
     }
@@ -67,6 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!supabase) {
       setPlatformRole("super_admin");
       setRole("admin");
+      setEntitlements(demoEntitlements);
       setAccountActive(true);
       setLoading(false);
       return;
@@ -89,6 +156,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setPlatformRole(null);
       setMemberships([]);
       setActiveClinicIdState(null);
+      setEntitlements(null);
       setAccountActive(false);
       setLoading(false);
       return;
@@ -103,10 +171,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setActiveClinicIdState(chosen?.clinic_id ?? null);
     setRole(chosen ? mapClinicRole(chosen.role) : "patient");
     setAccountActive(true);
-    setLoading(false);
 
-    if (chosen) localStorage.setItem(ACTIVE_CLINIC_KEY, chosen.clinic_id);
-  }, []);
+    if (chosen) {
+      localStorage.setItem(ACTIVE_CLINIC_KEY, chosen.clinic_id);
+      await loadEntitlements(chosen.clinic_id);
+    } else {
+      setEntitlements(null);
+      setEntitlementsLoading(false);
+    }
+
+    setLoading(false);
+  }, [loadEntitlements]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -134,7 +209,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(ACTIVE_CLINIC_KEY, clinicId);
     setActiveClinicIdState(clinicId);
     setRole(mapClinicRole(membership.role));
-  }, [memberships]);
+    setEntitlements(null);
+    void loadEntitlements(clinicId);
+  }, [memberships, loadEntitlements]);
 
   const activeMembership = memberships.find((membership) => membership.clinic_id === activeClinicIdState) ?? null;
 
@@ -147,15 +224,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     activeClinicId: activeClinicIdState,
     activeClinic: (activeMembership?.clinic as Clinic | null | undefined) ?? null,
     activeClinicRole: activeMembership?.role ?? null,
+    entitlements,
+    entitlementsLoading,
     loading,
     accountActive,
     mustChangePassword: Boolean(user?.app_metadata?.must_change_password),
     demoMode: !isSupabaseConfigured,
+    hasFeature: (feature: string) => Boolean(entitlements?.usable && entitlements.plan?.features?.[feature]),
+    planLimit: (limit: string) => {
+      const value = entitlements?.plan?.limits?.[limit];
+      return typeof value === "number" && Number.isFinite(value) ? value : null;
+    },
     signIn: async (email, password) => {
       if (!supabase) {
         setUser(demoUser);
         setPlatformRole("super_admin");
         setRole("admin");
+        setEntitlements(demoEntitlements);
         return;
       }
       setLoading(true);
@@ -207,6 +292,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem(ACTIVE_CLINIC_KEY);
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
+      setEntitlements(null);
     },
     setActiveClinicId,
     refreshTenantContext: async () => {
@@ -221,6 +307,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     memberships,
     activeClinicIdState,
     activeMembership,
+    entitlements,
+    entitlementsLoading,
     loading,
     accountActive,
     setActiveClinicId,
