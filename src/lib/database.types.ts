@@ -136,6 +136,7 @@ export type Database = {
         Row: {
           action: string
           actor_user_id: string | null
+          clinic_id: string | null
           created_at: string
           entity_id: string | null
           entity_type: string
@@ -145,6 +146,7 @@ export type Database = {
         Insert: {
           action: string
           actor_user_id?: string | null
+          clinic_id?: string | null
           created_at?: string
           entity_id?: string | null
           entity_type: string
@@ -154,19 +156,58 @@ export type Database = {
         Update: {
           action?: string
           actor_user_id?: string | null
+          clinic_id?: string | null
           created_at?: string
           entity_id?: string | null
           entity_type?: string
           id?: never
           metadata?: Json
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      booking_abuse_events: {
+        Row: {
+          clinic_id: string
+          created_at: string
+          fingerprint: string
+          id: string
+        }
+        Insert: {
+          clinic_id: string
+          created_at?: string
+          fingerprint: string
+          id?: string
+        }
+        Update: {
+          clinic_id?: string
+          created_at?: string
+          fingerprint?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_abuse_events_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       booking_requests: {
         Row: {
           clinic_id: string
           created_at: string
           doctor_id: string | null
+          duration_minutes: number
           email: string | null
           full_name: string
           id: string
@@ -183,6 +224,7 @@ export type Database = {
           clinic_id: string
           created_at?: string
           doctor_id?: string | null
+          duration_minutes?: number
           email?: string | null
           full_name: string
           id?: string
@@ -199,6 +241,7 @@ export type Database = {
           clinic_id?: string
           created_at?: string
           doctor_id?: string | null
+          duration_minutes?: number
           email?: string | null
           full_name?: string
           id?: string
@@ -238,6 +281,44 @@ export type Database = {
             columns: ["treatment_id"]
             isOneToOne: false
             referencedRelation: "treatments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clinic_business_hours: {
+        Row: {
+          clinic_id: string
+          close_time: string | null
+          enabled: boolean
+          open_time: string | null
+          slot_minutes: number
+          updated_at: string
+          weekday: number
+        }
+        Insert: {
+          clinic_id: string
+          close_time?: string | null
+          enabled?: boolean
+          open_time?: string | null
+          slot_minutes?: number
+          updated_at?: string
+          weekday: number
+        }
+        Update: {
+          clinic_id?: string
+          close_time?: string | null
+          enabled?: boolean
+          open_time?: string | null
+          slot_minutes?: number
+          updated_at?: string
+          weekday?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clinic_business_hours_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
             referencedColumns: ["id"]
           },
         ]
@@ -283,6 +364,7 @@ export type Database = {
       clinic_site_settings: {
         Row: {
           assets: Json
+          booking_settings: Json
           clinic_id: string
           content: Json
           custom_domain: string | null
@@ -301,6 +383,7 @@ export type Database = {
         }
         Insert: {
           assets?: Json
+          booking_settings?: Json
           clinic_id: string
           content?: Json
           custom_domain?: string | null
@@ -319,6 +402,7 @@ export type Database = {
         }
         Update: {
           assets?: Json
+          booking_settings?: Json
           clinic_id?: string
           content?: Json
           custom_domain?: string | null
@@ -1217,6 +1301,7 @@ export type Database = {
           active: boolean
           avatar_path: string | null
           created_at: string
+          email: string | null
           full_name: string | null
           id: string
           phone: string | null
@@ -1228,6 +1313,7 @@ export type Database = {
           active?: boolean
           avatar_path?: string | null
           created_at?: string
+          email?: string | null
           full_name?: string | null
           id: string
           phone?: string | null
@@ -1239,6 +1325,7 @@ export type Database = {
           active?: boolean
           avatar_path?: string | null
           created_at?: string
+          email?: string | null
           full_name?: string | null
           id?: string
           phone?: string | null
@@ -1618,6 +1705,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      convert_booking_request: {
+        Args: { p_booking_request_id: string }
+        Returns: Json
+      }
       create_my_patient_profile: {
         Args: {
           p_address?: string
@@ -1690,6 +1781,13 @@ export type Database = {
         Args: {
           p_appointment_id: string
           p_status: Database["public"]["Enums"]["appointment_status"]
+        }
+        Returns: boolean
+      }
+      set_treatment_plan_status: {
+        Args: {
+          p_status: Database["public"]["Enums"]["plan_status"]
+          p_treatment_plan_id: string
         }
         Returns: boolean
       }
