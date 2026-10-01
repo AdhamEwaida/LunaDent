@@ -42,6 +42,15 @@ export default function App() {
     </ProtectedRoute>
   );
 
+  const secureAdminFeature = (
+    roles: Array<(typeof staffRoles)[number]>,
+    requiredFeature: string,
+  ) => (
+    <ProtectedRoute roles={roles} requiredFeature={requiredFeature}>
+      <AdminDashboardPage />
+    </ProtectedRoute>
+  );
+
   const accountingElement = (
     <ProtectedRoute roles={["admin", "receptionist", "accountant"]} requiredFeature="accounting">
       <AccountingLive />
@@ -82,16 +91,12 @@ export default function App() {
                 </ProtectedRoute>
               } />
               <Route path="/admin" element={secureAdmin([...staffRoles])} />
-              <Route path="/admin/patients" element={secureAdmin([...staffRoles])} />
-              <Route path="/admin/patients/:patientId" element={secureAdmin([...staffRoles])} />
-              <Route path="/admin/appointments" element={secureAdmin(["admin", "dentist", "receptionist"])} />
-              <Route path="/admin/treatment-plans" element={secureAdmin(["admin", "dentist"])} />
-              <Route path="/admin/inventory" element={
-                <ProtectedRoute roles={["admin", "dentist"]} requiredFeature="inventory">
-                  <AdminDashboardPage />
-                </ProtectedRoute>
-              } />
-              <Route path="/admin/leads" element={secureAdmin(["admin", "receptionist"])} />
+              <Route path="/admin/patients" element={secureAdminFeature([...staffRoles], "patients")} />
+              <Route path="/admin/patients/:patientId" element={secureAdminFeature([...staffRoles], "patients")} />
+              <Route path="/admin/appointments" element={secureAdminFeature(["admin", "dentist", "receptionist"], "appointments")} />
+              <Route path="/admin/treatment-plans" element={secureAdminFeature(["admin", "dentist"], "patients")} />
+              <Route path="/admin/inventory" element={secureAdminFeature(["admin", "dentist"], "inventory")} />
+              <Route path="/admin/leads" element={secureAdminFeature(["admin", "receptionist"], "appointments")} />
               <Route path="/admin/doctors" element={secureAdmin(["admin", "receptionist"])} />
               <Route path="/admin/services" element={secureAdmin(["admin", "receptionist"])} />
               <Route path="/admin/site-builder" element={
