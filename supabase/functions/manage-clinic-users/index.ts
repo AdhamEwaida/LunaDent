@@ -132,6 +132,37 @@ Deno.serve(async (req: Request) => {
       return Response.json({ error: "Clinic owner access required." }, { status: 403, headers: cors });
     }
 
+    if (action === "audit") {
+      const { data: logs, error: logsError } = await admin
+        .from("audit_logs")
+        .select("id,actor_user_id,action,entity_type,entity_id,metadata,created_at")
+        .eq("clinic_id", clinicId)
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (logsError) throw logsError;
+
+      const actorIds = Array.from(new Set((logs ?? []).map((log) => log.actor_user_id).filter(Boolean)));
+      const { data: actorProfiles, error: actorProfileError } = actorIds.length
+        ? await admin.from("profiles").select("id,full_name").in("id", actorIds)
+        : { data: [], error: null };
+      if (actorProfileError) throw actorProfileError;
+
+      const profileMap = new Map((actorProfiles ?? []).map((profile) => [profile.id, profile.full_name]));
+      const authPairs = await Promise.all(actorIds.map(async (id) => {
+        const { data } = await admin.auth.admin.getUserById(id);
+        return [id, data.user?.email ?? null] as const;
+      }));
+      const emailMap = new Map(authPairs);
+
+      return Response.json({
+        logs: (logs ?? []).map((log) => ({
+          ...log,
+          actor_name: log.actor_user_id ? profileMap.get(log.actor_user_id) ?? null : null,
+          actor_email: log.actor_user_id ? emailMap.get(log.actor_user_id) ?? null : null,
+        })),
+      }, { headers: cors });
+    }
+
     if (action === "list") {
       const { data: memberships, error: membershipError } = await admin
         .from("clinic_memberships")
