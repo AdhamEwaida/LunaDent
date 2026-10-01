@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   Activity, AlertTriangle, CalendarDays, CheckCircle2, ChevronRight, ClipboardList,
@@ -52,15 +52,15 @@ export function ClinicPatients() {
   const [error, setError] = useState("");
   const [form, setForm] = useState({ first_name: "", last_name: "", phone: "", email: "", date_of_birth: "" });
 
-  const load = async (search = query) => {
+  const load = useCallback(async (search = "") => {
     setLoading(true);
     setError("");
     try { setPatients(await clinicRepository.listPatients(search)); }
     catch (err) { setError(err instanceof Error ? err.message : "Failed to load patients."); }
     finally { setLoading(false); }
-  };
+  }, []);
 
-  useEffect(() => { void load(""); }, []);
+  useEffect(() => { void load(""); }, [load]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -148,8 +148,10 @@ function DentalChart({ patientId }: { patientId: string }) {
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const load = async () => setEntries(await clinicRepository.listDentalChart(patientId));
-  useEffect(() => { void load(); }, [patientId]);
+  const load = useCallback(async () => {
+    setEntries(await clinicRepository.listDentalChart(patientId));
+  }, [patientId]);
+  useEffect(() => { void load(); }, [load]);
 
   const latest = useMemo(() => {
     const map = new Map<number, DentalChartEntry>();
@@ -210,33 +212,33 @@ function TreatmentPlansTab({ patientId }: { patientId: string }) {
     discount: "0",
   });
 
-  const loadPlans = async (preferredId?: string) => {
+  const loadPlans = useCallback(async (preferredId?: string) => {
     const rows = await clinicRepository.listTreatmentPlans(patientId);
     setPlans(rows);
     setSelectedPlanId((current) => {
       const candidate = preferredId || current;
       return rows.some((plan) => plan.id === candidate) ? candidate : rows[0]?.id || "";
     });
-  };
+  }, [patientId]);
 
-  const loadItems = async (planId: string) => {
+  const loadItems = useCallback(async (planId: string) => {
     if (!planId) {
       setItems([]);
       return;
     }
     setItems(await clinicRepository.listTreatmentPlanItems(planId));
-  };
+  }, []);
 
   useEffect(() => {
     void Promise.all([
       loadPlans(),
       clinicRepository.listTreatments().then(setTreatments),
     ]).catch((err) => setError(err instanceof Error ? err.message : "Unable to load treatment plans."));
-  }, [patientId]);
+  }, [loadPlans]);
 
   useEffect(() => {
     void loadItems(selectedPlanId).catch((err) => setError(err instanceof Error ? err.message : "Unable to load plan items."));
-  }, [selectedPlanId]);
+  }, [loadItems, selectedPlanId]);
 
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId) || null;
 
@@ -520,8 +522,10 @@ function TreatmentPlansTab({ patientId }: { patientId: string }) {
 function ClinicalNotesTab({ patientId }: { patientId: string }) {
   const [notes, setNotes] = useState<ClinicalNote[]>([]);
   const [text, setText] = useState("");
-  const load = async () => setNotes(await clinicRepository.listClinicalNotes(patientId));
-  useEffect(() => { void load(); }, [patientId]);
+  const load = useCallback(async () => {
+    setNotes(await clinicRepository.listClinicalNotes(patientId));
+  }, [patientId]);
+  useEffect(() => { void load(); }, [load]);
   const add = async (event: FormEvent) => { event.preventDefault(); if (!text.trim()) return; await clinicRepository.createClinicalNote(patientId, text.trim()); setText(""); await load(); };
   return <div className="space-y-4"><form onSubmit={add} className="rounded-2xl border p-4" style={cardStyle}><label className="text-xs font-semibold">New clinical note<textarea value={text} onChange={(e) => setText(e.target.value)} rows={4} className="mt-2 w-full px-3 py-2.5 rounded-xl border bg-transparent text-sm resize-none" placeholder="Diagnosis, procedure, progress, follow-up..." /></label><div className="text-right mt-2"><button className="px-4 py-2 rounded-xl text-sm font-semibold" style={{ background: "var(--primary)", color: "white" }}>Add Note</button></div></form>{notes.map((note) => <div key={note.id} className="rounded-2xl border p-4" style={cardStyle}><div className="flex justify-between gap-3 mb-2"><StatusBadge tone="primary">{note.note_type}</StatusBadge><span className="text-xs" style={muted}>{new Date(note.created_at).toLocaleString()}</span></div><p className="text-sm leading-6">{note.note}</p></div>)}{notes.length === 0 && <EmptyState icon={FileText} title="No clinical notes" description="Clinical notes will appear in chronological order." />}</div>;
 }
@@ -547,16 +551,16 @@ function DocumentsTab({ patientId }: { patientId: string }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setError("");
     try {
       setDocuments(await clinicRepository.listPatientDocuments(patientId, undefined, false));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load documents.");
     }
-  };
+  }, [patientId]);
 
-  useEffect(() => { void load(); }, [patientId]);
+  useEffect(() => { void load(); }, [load]);
 
   const upload = async (event: FormEvent) => {
     event.preventDefault();
@@ -1121,7 +1125,7 @@ export function ClinicUsers() {
     license_number: "",
   });
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!activeClinicId) return;
     setError("");
     try {
@@ -1129,9 +1133,9 @@ export function ClinicUsers() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load users.");
     }
-  };
+  }, [activeClinicId]);
 
-  useEffect(() => { void load(); }, [activeClinicId]);
+  useEffect(() => { void load(); }, [load]);
 
   if (!activeClinicId) return <EmptyState icon={UserRound} title="No clinic selected" description="Select a clinic before managing staff." />;
   if (activeClinicRole !== "clinic_owner") return <EmptyState icon={UserRound} title="Clinic Owner access required" description="Only the Clinic Owner can create or manage staff accounts." />;
