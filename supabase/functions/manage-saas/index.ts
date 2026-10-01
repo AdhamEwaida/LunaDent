@@ -67,9 +67,19 @@ Deno.serve(async (req: Request) => {
       const { data: existingClinic } = await admin.from("clinics").select("id").eq("slug", slug).maybeSingle();
       if (existingClinic) return Response.json({ error: "Clinic slug is already in use." }, { status: 409, headers: cors });
 
-      const { data: listed, error: listError } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      if (listError) throw listError;
-      let owner = listed.users.find((u) => u.email?.toLowerCase() === ownerEmail);
+      const { data: ownerProfile, error: ownerProfileLookupError } = await admin
+        .from("profiles")
+        .select("id")
+        .eq("email", ownerEmail)
+        .maybeSingle();
+      if (ownerProfileLookupError) throw ownerProfileLookupError;
+
+      let owner = null;
+      if (ownerProfile?.id) {
+        const { data: ownerAuth, error: ownerAuthError } = await admin.auth.admin.getUserById(ownerProfile.id);
+        if (ownerAuthError) throw ownerAuthError;
+        owner = ownerAuth.user ?? null;
+      }
 
       if (!owner) {
         if (temporaryPassword.length < 8) {
