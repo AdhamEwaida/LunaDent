@@ -1,10 +1,10 @@
-import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, CalendarClock, Check, Eye, ImagePlus, Palette, Save, SlidersHorizontal, Type, Upload } from "lucide-react";
 import ClinicThemeRenderer from "@/components/ClinicThemeRenderer";
 import { useAuth } from "@/auth/AuthContext";
 import { saasRepository } from "@/saas/repository";
 import { supabase } from "@/lib/supabase";
-import type { ClinicSiteSettings, PublicClinicSite, SiteSection, SiteTokens, ThemeDefinition } from "@/saas/types";
+import type { BookingSettings, ClinicSiteSettings, PublicClinicSite, SiteTokens, ThemeDefinition } from "@/saas/types";
 
 const colorFields: Array<[keyof NonNullable<SiteTokens["colors"]>, string]> = [
   ["primary","Primary"],
@@ -16,7 +16,7 @@ const colorFields: Array<[keyof NonNullable<SiteTokens["colors"]>, string]> = [
   ["muted","Muted text"],
 ];
 
-const BOOKING_DEFAULTS = {
+const BOOKING_DEFAULTS: Required<BookingSettings> = {
   days: [1, 2, 3, 4, 5],
   start: "09:00",
   end: "17:00",
@@ -28,6 +28,37 @@ const BOOKING_DEFAULTS = {
 const DAY_LABELS = [
   [0, "Sun"], [1, "Mon"], [2, "Tue"], [3, "Wed"], [4, "Thu"], [5, "Fri"], [6, "Sat"],
 ] as const;
+
+type TypographyScaleKey = "headingScale" | "bodyScale";
+type NumericLayoutKey = "maxWidth" | "sectionSpacing" | "heroMinHeight" | "navHeight" | "buttonRadius" | "cardRadius";
+type EditableTextSection = "services" | "doctors" | "booking" | "contact";
+
+const TYPOGRAPHY_SCALE_CONTROLS: Array<{
+  key: TypographyScaleKey;
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+}> = [
+  { key: "headingScale", label: "Heading size", min: 0.8, max: 1.4, step: 0.05 },
+  { key: "bodyScale", label: "Body size", min: 0.85, max: 1.25, step: 0.05 },
+];
+
+const LAYOUT_CONTROLS: Array<{
+  key: NumericLayoutKey;
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  unit: string;
+}> = [
+  { key: "maxWidth", label: "Content width", min: 900, max: 1500, step: 20, unit: "px" },
+  { key: "sectionSpacing", label: "Section spacing", min: 40, max: 160, step: 4, unit: "px" },
+  { key: "heroMinHeight", label: "Hero height", min: 420, max: 900, step: 20, unit: "px" },
+  { key: "navHeight", label: "Navigation height", min: 56, max: 110, step: 2, unit: "px" },
+  { key: "buttonRadius", label: "Button radius", min: 0, max: 999, step: 1, unit: "px" },
+  { key: "cardRadius", label: "Card radius", min: 0, max: 50, step: 1, unit: "px" },
+];
 
 const sectionNames: Record<string,string> = {
   hero:"Hero",
@@ -50,8 +81,8 @@ export default function SiteBuilder() {
   const { activeClinicId, activeClinic, activeClinicRole } = useAuth();
   const [themes, setThemes] = useState<ThemeDefinition[]>([]);
   const [settings, setSettings] = useState<ClinicSiteSettings | null>(null);
-  const [doctors, setDoctors] = useState<any[]>([]);
-  const [treatments, setTreatments] = useState<any[]>([]);
+  const [doctors, setDoctors] = useState<PublicClinicSite["doctors"]>([]);
+  const [treatments, setTreatments] = useState<PublicClinicSite["treatments"]>([]);
   const [clinicDraft, setClinicDraft] = useState({
     name: "",
     phone: "",
@@ -67,7 +98,7 @@ export default function SiteBuilder() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!activeClinicId || !activeClinic || !supabase) return;
     setError("");
     try {
@@ -95,14 +126,14 @@ export default function SiteBuilder() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load website settings.");
     }
-  };
+  }, [activeClinicId, activeClinic]);
 
-  useEffect(() => { void load(); }, [activeClinicId, activeClinic?.id]);
+  useEffect(() => { void load(); }, [load]);
 
   const selectedTheme = themes.find(theme=>theme.key===settings?.theme_key) ?? null;
-  const bookingSettings = {
+  const bookingSettings: Required<BookingSettings> = {
     ...BOOKING_DEFAULTS,
-    ...((settings?.content as any)?.bookingSettings || {}),
+    ...(settings?.content.bookingSettings || {}),
   };
   const effectiveTokens = useMemo(() => deepMergeTokens(selectedTheme?.default_tokens || {}, settings?.tokens || {}), [selectedTheme, settings?.tokens]);
 
@@ -126,7 +157,7 @@ export default function SiteBuilder() {
       ...current,
       tokens: {
         ...(current.tokens || {}),
-        [group]: { ...((current.tokens as any)?.[group] || {}), [key]: value },
+        [group]: { ...(current.tokens[group] || {}), [key]: value },
       },
     } : current);
   };
@@ -149,14 +180,21 @@ export default function SiteBuilder() {
     } : current);
   };
 
-  const updateSectionContent = (section: string, key: string, value: string) => {
-    setSettings(current => current ? {
-      ...current,
-      content: {
-        ...(current.content || {}),
-        [section]: { ...(current.content?.[section] || {}), [key]: value },
-      },
-    } : current);
+  const updateSectionContent = (section: EditableTextSection, key: string, value: string) => {
+    setSettings((current) => {
+      if (!current) return current;
+      const sectionValue = current.content[section];
+      const currentSection = sectionValue && typeof sectionValue === "object" && !Array.isArray(sectionValue)
+        ? sectionValue as Record<string, unknown>
+        : {};
+      return {
+        ...current,
+        content: {
+          ...current.content,
+          [section]: { ...currentSection, [key]: value },
+        },
+      };
+    });
   };
 
   const updateJourneyStep = (index: number, key: "title" | "text", value: string) => {
@@ -167,7 +205,7 @@ export default function SiteBuilder() {
         { step: "02", title: "Visit the clinic", text: "Receive care from your dental team." },
         { step: "03", title: "Stay connected", text: "Use the secure patient portal for follow-up." },
       ];
-      const steps = [...(current.content?.journey?.steps || defaults)].map((item: any) => ({ ...item }));
+      const steps = [...(current.content?.journey?.steps || defaults)].map((item) => ({ ...item }));
       steps[index] = { ...steps[index], [key]: value };
       return {
         ...current,
@@ -326,22 +364,15 @@ export default function SiteBuilder() {
                 </select>
               </label>
             </div>
-            {[["headingScale","Heading size",0.8,1.4,0.05],["bodyScale","Body size",0.85,1.25,0.05]].map(([key,label,min,max,step])=><label key={String(key)} className="block text-xs font-semibold mt-4">{label} · {Number((effectiveTokens.typography as any)?.[key] || 1).toFixed(2)}x
-              <input type="range" min={Number(min)} max={Number(max)} step={Number(step)} value={Number((effectiveTokens.typography as any)?.[key] || 1)} onChange={e=>updateTokens("typography",String(key),Number(e.target.value))} className="w-full mt-2" />
+            {TYPOGRAPHY_SCALE_CONTROLS.map(({key,label,min,max,step})=><label key={key} className="block text-xs font-semibold mt-4">{label} · {Number(effectiveTokens.typography?.[key] || 1).toFixed(2)}x
+              <input type="range" min={min} max={max} step={step} value={Number(effectiveTokens.typography?.[key] || 1)} onChange={e=>updateTokens("typography",key,Number(e.target.value))} className="w-full mt-2" />
             </label>)}
           </section>
 
           <section className="rounded-2xl border bg-white p-5">
             <div className="flex items-center gap-2 font-bold"><SlidersHorizontal size={17}/>Sizes & spacing</div>
-            {[
-              ["maxWidth","Content width",900,1500,20,"px"],
-              ["sectionSpacing","Section spacing",40,160,4,"px"],
-              ["heroMinHeight","Hero height",420,900,20,"px"],
-              ["navHeight","Navigation height",56,110,2,"px"],
-              ["buttonRadius","Button radius",0,999,1,"px"],
-              ["cardRadius","Card radius",0,50,1,"px"],
-            ].map(([key,label,min,max,step,unit])=><label key={String(key)} className="block text-xs font-semibold mt-4 first:mt-3">{label} · {Number((effectiveTokens.layout as any)?.[key] || 0)}{unit}
-              <input type="range" min={Number(min)} max={Number(max)} step={Number(step)} value={Number((effectiveTokens.layout as any)?.[key] || 0)} onChange={e=>updateTokens("layout",String(key),Number(e.target.value))} className="w-full mt-2" />
+            {LAYOUT_CONTROLS.map(({key,label,min,max,step,unit})=><label key={key} className="block text-xs font-semibold mt-4 first:mt-3">{label} · {Number(effectiveTokens.layout?.[key] || 0)}{unit}
+              <input type="range" min={min} max={max} step={step} value={Number(effectiveTokens.layout?.[key] || 0)} onChange={e=>updateTokens("layout",key,Number(e.target.value))} className="w-full mt-2" />
             </label>)}
           </section>
 
