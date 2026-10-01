@@ -9,6 +9,65 @@ const cors = {
 
 const STAFF_ROLES = ["dentist", "receptionist", "accountant"] as const;
 
+type AdminClient = ReturnType<typeof createClient>;
+
+async function getClinicEntitlements(admin: AdminClient, clinicId: string) {
+  const [{ data: clinic, error: clinicError }, { data: subscription, error: subscriptionError }] = await Promise.all([
+    admin.from("clinics").select("id,status").eq("id", clinicId).maybeSingle(),
+    admin
+      .from("subscriptions")
+      .select("status,trial_ends_at,current_period_end,plan:plans(code,name,description,price_monthly,currency,active,features,limits)")
+      .eq("clinic_id", clinicId)
+      .maybeSingle(),
+  ]);
+
+  if (clinicError) throw clinicError;
+  if (subscriptionError) throw subscriptionError;
+  if (!clinic) throw new Error("Clinic not found.");
+
+  const plan = Array.isArray(subscription?.plan) ? subscription?.plan[0] ?? null : subscription?.plan ?? null;
+  const now = Date.now();
+  const trialValid = subscription?.status !== "trialing"
+    || !subscription?.trial_ends_at
+    || new Date(subscription.trial_ends_at).getTime() > now;
+  const periodValid = !subscription?.current_period_end
+    || new Date(subscription.current_period_end).getTime() > now;
+  const clinicUsable = ["trialing", "active"].includes(String(clinic.status));
+  const subscriptionUsable = Boolean(
+    subscription
+    && ["trialing", "active"].includes(String(subscription.status))
+    && trialValid
+    && periodValid
+    && plan?.active !== false,
+  );
+
+  return {
+    clinic_id: clinicId,
+    clinic_status: clinic.status,
+    usable: clinicUsable && subscriptionUsable,
+    subscription_status: subscription?.status ?? "missing",
+    trial_ends_at: subscription?.trial_ends_at ?? null,
+    current_period_end: subscription?.current_period_end ?? null,
+    plan: plan
+      ? {
+          code: plan.code,
+          name: plan.name,
+          description: plan.description,
+          price_monthly: Number(plan.price_monthly ?? 0),
+          currency: plan.currency,
+          active: plan.active,
+          features: plan.features ?? {},
+          limits: plan.limits ?? {},
+        }
+      : null,
+  };
+}
+
+function numericLimit(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
@@ -58,7 +117,17 @@ Deno.serve(async (req: Request) => {
     ]);
 
     const isSuperAdmin = profile?.active === true && profile?.platform_role === "super_admin";
-    const isOwner = membership?.active === true && membership?.role === "clinic_owner";
+    const isMember = membership?.active === true;
+
+    if (action === "context") {
+      if (!isSuperAdmin && !isMember) {
+        return Response.json({ error: "Clinic access required." }, { status: 403, headers: cors });
+      }
+      const entitlements = await getClinicEntitlements(admin, clinicId);
+      return Response.json({ entitlements }, { headers: cors });
+    }
+
+    const isOwner = isMember && membership?.role === "clinic_owner";
     if (!isSuperAdmin && !isOwner) {
       return Response.json({ error: "Clinic owner access required." }, { status: 403, headers: cors });
     }
@@ -71,16 +140,20 @@ Deno.serve(async (req: Request) => {
         .order("created_at");
       if (membershipError) throw membershipError;
 
-      const { data: profiles, error: profileError } = await admin
-        .from("profiles")
-        .select("id,full_name,phone");
+      const ids = (memberships ?? []).map((item) => item.user_id);
+      const { data: profiles, error: profileError } = ids.length
+        ? await admin.from("profiles").select("id,full_name,phone").in("id", ids)
+        : { data: [], error: null };
       if (profileError) throw profileError;
 
-      const { data: authUsers, error: authError } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      if (authError) throw authError;
+      const authPairs = await Promise.all(ids.map(async (id) => {
+        const { data, error } = await admin.auth.admin.getUserById(id);
+        if (error) return [id, null] as const;
+        return [id, data.user ?? null] as const;
+      }));
 
       const profileMap = new Map((profiles ?? []).map((p) => [p.id, p]));
-      const authMap = new Map(authUsers.users.map((u) => [u.id, u]));
+      const authMap = new Map(authPairs);
 
       const users = (memberships ?? []).map((m) => {
         const p = profileMap.get(m.user_id);
@@ -116,11 +189,48 @@ Deno.serve(async (req: Request) => {
         );
       }
 
+      const entitlements = await getClinicEntitlements(admin, clinicId);
+      if (!entitlements.usable || !entitlements.plan) {
+        return Response.json({ error: "This clinic subscription is not active." }, { status: 403, headers: cors });
+      }
+
       const { data: listed, error: listError } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
       if (listError) throw listError;
       let targetUser = listed.users.find((u) => u.email?.toLowerCase() === email);
-      let createdNow = false;
 
+      const { data: currentMembership } = targetUser
+        ? await admin
+            .from("clinic_memberships")
+            .select("role,active")
+            .eq("clinic_id", clinicId)
+            .eq("user_id", targetUser.id)
+            .maybeSingle()
+        : { data: null };
+
+      const [{ count: activeStaffCount }, { count: activeDentistCount }] = await Promise.all([
+        admin.from("clinic_memberships").select("*", { count: "exact", head: true }).eq("clinic_id", clinicId).eq("active", true),
+        admin.from("clinic_memberships").select("*", { count: "exact", head: true }).eq("clinic_id", clinicId).eq("active", true).eq("role", "dentist"),
+      ]);
+
+      const staffLimit = numericLimit(entitlements.plan.limits?.staff);
+      const dentistLimit = numericLimit(entitlements.plan.limits?.dentists);
+      const activatesMembership = !currentMembership?.active;
+      const addsDentistSeat = role === "dentist" && (!currentMembership?.active || currentMembership?.role !== "dentist");
+
+      if (activatesMembership && staffLimit && Number(activeStaffCount ?? 0) >= staffLimit) {
+        return Response.json(
+          { error: `Your ${entitlements.plan.name} plan allows up to ${staffLimit} active staff accounts.`, code: "STAFF_LIMIT_REACHED" },
+          { status: 409, headers: cors },
+        );
+      }
+      if (addsDentistSeat && dentistLimit && Number(activeDentistCount ?? 0) >= dentistLimit) {
+        return Response.json(
+          { error: `Your ${entitlements.plan.name} plan allows up to ${dentistLimit} active dentists.`, code: "DENTIST_LIMIT_REACHED" },
+          { status: 409, headers: cors },
+        );
+      }
+
+      let createdNow = false;
       if (!targetUser) {
         const { data: created, error } = await admin.auth.admin.createUser({
           email,
@@ -199,7 +309,7 @@ Deno.serve(async (req: Request) => {
 
       const { data: previous, error: previousError } = await admin
         .from("clinic_memberships")
-        .select("role")
+        .select("role,active")
         .eq("clinic_id", clinicId)
         .eq("user_id", userId)
         .single();
@@ -207,6 +317,26 @@ Deno.serve(async (req: Request) => {
 
       if (previous.role === "clinic_owner") {
         return Response.json({ error: "Clinic owner access cannot be modified here." }, { status: 400, headers: cors });
+      }
+
+      if (active) {
+        const entitlements = await getClinicEntitlements(admin, clinicId);
+        if (!entitlements.usable || !entitlements.plan) {
+          return Response.json({ error: "This clinic subscription is not active." }, { status: 403, headers: cors });
+        }
+        const [{ count: activeStaffCount }, { count: activeDentistCount }] = await Promise.all([
+          admin.from("clinic_memberships").select("*", { count: "exact", head: true }).eq("clinic_id", clinicId).eq("active", true),
+          admin.from("clinic_memberships").select("*", { count: "exact", head: true }).eq("clinic_id", clinicId).eq("active", true).eq("role", "dentist"),
+        ]);
+        const staffLimit = numericLimit(entitlements.plan.limits?.staff);
+        const dentistLimit = numericLimit(entitlements.plan.limits?.dentists);
+
+        if (!previous.active && staffLimit && Number(activeStaffCount ?? 0) >= staffLimit) {
+          return Response.json({ error: `Your ${entitlements.plan.name} plan allows up to ${staffLimit} active staff accounts.` }, { status: 409, headers: cors });
+        }
+        if (role === "dentist" && (!previous.active || previous.role !== "dentist") && dentistLimit && Number(activeDentistCount ?? 0) >= dentistLimit) {
+          return Response.json({ error: `Your ${entitlements.plan.name} plan allows up to ${dentistLimit} active dentists.` }, { status: 409, headers: cors });
+        }
       }
 
       const { error: membershipError } = await admin
