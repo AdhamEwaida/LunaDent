@@ -143,16 +143,12 @@ Deno.serve(async (req: Request) => {
 
       const actorIds = Array.from(new Set((logs ?? []).map((log) => log.actor_user_id).filter(Boolean)));
       const { data: actorProfiles, error: actorProfileError } = actorIds.length
-        ? await admin.from("profiles").select("id,full_name").in("id", actorIds)
+        ? await admin.from("profiles").select("id,full_name,email").in("id", actorIds)
         : { data: [], error: null };
       if (actorProfileError) throw actorProfileError;
 
       const profileMap = new Map((actorProfiles ?? []).map((profile) => [profile.id, profile.full_name]));
-      const authPairs = await Promise.all(actorIds.map(async (id) => {
-        const { data } = await admin.auth.admin.getUserById(id);
-        return [id, data.user?.email ?? null] as const;
-      }));
-      const emailMap = new Map(authPairs);
+      const emailMap = new Map((actorProfiles ?? []).map((profile) => [profile.id, profile.email]));
 
       return Response.json({
         logs: (logs ?? []).map((log) => ({
@@ -173,7 +169,7 @@ Deno.serve(async (req: Request) => {
 
       const ids = (memberships ?? []).map((item) => item.user_id);
       const { data: profiles, error: profileError } = ids.length
-        ? await admin.from("profiles").select("id,full_name,phone").in("id", ids)
+        ? await admin.from("profiles").select("id,full_name,phone,email").in("id", ids)
         : { data: [], error: null };
       if (profileError) throw profileError;
 
@@ -191,7 +187,7 @@ Deno.serve(async (req: Request) => {
         const u = authMap.get(m.user_id);
         return {
           id: m.user_id,
-          email: u?.email,
+          email: p?.email || u?.email,
           full_name: p?.full_name,
           phone: p?.phone,
           role: m.role,
@@ -225,9 +221,19 @@ Deno.serve(async (req: Request) => {
         return Response.json({ error: "This clinic subscription is not active." }, { status: 403, headers: cors });
       }
 
-      const { data: listed, error: listError } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      if (listError) throw listError;
-      let targetUser = listed.users.find((u) => u.email?.toLowerCase() === email);
+      const { data: existingProfile, error: profileLookupError } = await admin
+        .from("profiles")
+        .select("id")
+        .eq("email", email)
+        .maybeSingle();
+      if (profileLookupError) throw profileLookupError;
+
+      let targetUser = null;
+      if (existingProfile?.id) {
+        const { data: existingAuth, error: authLookupError } = await admin.auth.admin.getUserById(existingProfile.id);
+        if (authLookupError) throw authLookupError;
+        targetUser = existingAuth.user ?? null;
+      }
 
       const { data: currentMembership } = targetUser
         ? await admin
