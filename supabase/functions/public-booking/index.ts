@@ -114,21 +114,31 @@ async function loadClinic(admin: AdminClient, slug: string) {
   if (clinicError) throw clinicError;
   if (!clinic) return null;
 
-  const [{ data: site, error: siteError }, { data: subscription, error: subscriptionError }] = await Promise.all([
+  const [
+    { data: site, error: siteError },
+    { data: subscription, error: subscriptionError },
+    { data: hours, error: hoursError },
+  ] = await Promise.all([
     admin.from("clinic_site_settings").select("published,content").eq("clinic_id", clinic.id).maybeSingle(),
     admin.from("subscriptions")
       .select("status,trial_ends_at,current_period_end,plan:plans(active,features)")
       .eq("clinic_id", clinic.id)
       .maybeSingle(),
+    admin.from("clinic_business_hours")
+      .select("weekday,enabled,open_time,close_time,slot_minutes")
+      .eq("clinic_id", clinic.id)
+      .order("weekday"),
   ]);
   if (siteError) throw siteError;
   if (subscriptionError) throw subscriptionError;
+  if (hoursError) throw hoursError;
   if (!site?.published || !subscriptionUsable(subscription)) return null;
 
   const content = asRecord(site.content);
   return {
     ...clinic,
     settings: normalizeSettings(content?.bookingSettings),
+    hours: hours ?? [],
   };
 }
 
@@ -151,9 +161,11 @@ async function availability(
   if (dayDiff < 0 || dayDiff > clinic.settings.horizonDays) return [];
 
   const weekday = requestedDate.getUTCDay();
-  if (!clinic.settings.days.includes(weekday)) return [];
+  const schedule = (clinic.hours ?? []).find((row) => Number(row.weekday) === weekday);
+  if (!schedule?.enabled || !schedule.open_time || !schedule.close_time) return [];
 
-  let duration = clinic.settings.slotMinutes;
+  const intervalMinutes = Math.max(10, Number(schedule.slot_minutes || 30));
+  let duration = intervalMinutes;
   if (treatmentId) {
     const { data: treatment, error } = await admin
       .from("treatments")
@@ -179,8 +191,8 @@ async function availability(
     if (!doctor) throw new Error("Selected doctor is unavailable.");
   }
 
-  const open = minuteOfDay(clinic.settings.start);
-  const close = minuteOfDay(clinic.settings.end);
+  const open = minuteOfDay(String(schedule.open_time).slice(0,5));
+  const close = minuteOfDay(String(schedule.close_time).slice(0,5));
   if (close <= open) return [];
 
   const blocked: Array<[number, number]> = [];
@@ -206,7 +218,7 @@ async function availability(
 
   const slots: string[] = [];
   const leadMinutes = clinic.settings.leadTimeHours * 60;
-  for (let start = open; start + duration <= close; start += clinic.settings.slotMinutes) {
+  for (let start = open; start + duration <= close; start += intervalMinutes) {
     if (date === localNow.date && start < localNow.minutes + leadMinutes) continue;
     const end = start + duration;
     if (blocked.some(([busyStart, busyEnd]) => start < busyEnd && end > busyStart)) continue;
@@ -241,7 +253,13 @@ Deno.serve(async (req: Request) => {
       const doctorId = body?.doctor_id ? String(body.doctor_id) : null;
       const treatmentId = body?.treatment_id ? String(body.treatment_id) : null;
       const slots = await availability(admin, clinic, date, doctorId, treatmentId);
-      return Response.json({ slots, settings: clinic.settings }, { headers: cors });
+      return Response.json({
+        slots,
+        settings: {
+          ...clinic.settings,
+          days: (clinic.hours ?? []).filter((row) => row.enabled).map((row) => Number(row.weekday)),
+        },
+      }, { headers: cors });
     }
 
     if (action !== "submit") {
