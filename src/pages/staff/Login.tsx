@@ -1,12 +1,10 @@
 import { FormEvent, useState } from "react";
-import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { LockKeyhole, Mail, ShieldCheck, Stethoscope } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 
 export default function StaffLogin() {
   const { user, role, isSuperAdmin, mustChangePassword, signIn, signOut } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
