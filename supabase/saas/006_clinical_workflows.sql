@@ -230,7 +230,7 @@ begin
 
   if v_timezone is null then raise exception 'clinic timezone is not configured'; end if;
 
-  select count(*),min(p.id)
+  select count(*),(array_agg(p.id order by p.created_at))[1]
   into v_patient_matches,v_patient_id
   from public.patients p
   where p.clinic_id=v_request.clinic_id
