@@ -8,11 +8,17 @@ Apply the reviewed SQL files in this order on a fresh development project:
 2. `001_core.sql`
 3. `002_rls.sql`
 4. `003_functions_storage.sql`
+5. `004_entitlements.sql`
+6. `005_booking_foundation.sql`
+7. `006_commercial_guards.sql`
+8. `007_clinical_workflows.sql`
+9. `008_booking_audit_professional.sql`
 
 Then deploy:
 
-- `../functions/manage-clinic-users`
-- `../functions/manage-saas`
+- `../functions/manage-clinic-users` with JWT verification enabled.
+- `../functions/manage-saas` with JWT verification enabled.
+- `../functions/public-booking` with JWT verification disabled; it performs its own server-side clinic, schedule, rate-limit, doctor and treatment validation.
 - `../functions/claim-initial-admin` is intentionally closed and returns HTTP 410; bootstrap is not part of the product anymore.
 
 ## Authorization model
@@ -67,3 +73,22 @@ The live Supabase project was verified after the SaaS conversion with:
 At the final advisor pass, the database had no RLS/function security lint, no duplicate-index warning, and no multiple-permissive-policy warning. `unused_index` remains informational because the product has little production traffic.
 
 Supabase Auth's **Leaked Password Protection** is an account/project Auth setting and is not configured by these SQL files. Enable it from the Supabase Auth password-security settings when available on the project's plan.
+
+
+## Commercial entitlements
+
+Plan features are enforced in both the UI and PostgreSQL/RLS boundary. Accounting, inventory, website access, premium themes, staff seats and dentist seats are not presentation-only flags.
+
+The platform currently uses `billing_provider = manual` until a payment processor is connected. Super Admin can change plan and subscription status without giving clinic users direct access to subscription records.
+
+Features that require external provisioning, including custom domains, public API access and multi-location operation, are intentionally disabled in active plan metadata until their infrastructure is connected.
+
+## Booking
+
+Public booking goes through the `public-booking` Edge Function. The browser never receives service-role credentials.
+
+Availability is computed from `clinic_business_hours`, treatment duration, optional doctor conflicts, clinic timezone, lead time and booking horizon. Public direct inserts into `booking_requests` are disabled in the final production state.
+
+## Audit trail
+
+Clinic owners can review tenant-scoped audit events. The audit trail records actor, action, entity identifier and changed field names. It does not duplicate patient or clinical row contents into audit metadata.
