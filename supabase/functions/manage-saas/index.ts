@@ -197,6 +197,34 @@ Deno.serve(async (req: Request) => {
       return Response.json({ ok: true }, { headers: cors });
     }
 
+    if (action === "update_subscription_status") {
+      const clinicId = String(body?.clinic_id ?? "");
+      const status = String(body?.status ?? "");
+      if (!clinicId || !["trialing","active","past_due","canceled","suspended"].includes(status)) {
+        return Response.json({ error: "Invalid clinic or subscription status." }, { status: 400, headers: cors });
+      }
+
+      const patch: Record<string, unknown> = { status };
+      if (status === "trialing") {
+        const days = Math.min(60, Math.max(1, Number(body?.trial_days ?? 14)));
+        patch.trial_ends_at = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+      } else {
+        patch.trial_ends_at = null;
+      }
+      if (status === "active" && body?.current_period_end) {
+        patch.current_period_end = String(body.current_period_end);
+      }
+
+      const { data: subscription, error } = await admin
+        .from("subscriptions")
+        .update(patch)
+        .eq("clinic_id", clinicId)
+        .select("id,status,trial_ends_at,current_period_end")
+        .single();
+      if (error) throw error;
+      return Response.json({ ok: true, subscription }, { headers: cors });
+    }
+
     if (action === "set_plan") {
       const clinicId = String(body?.clinic_id ?? "");
       const planCode = String(body?.plan_code ?? "");
