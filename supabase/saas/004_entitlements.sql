@@ -8,7 +8,7 @@ stable
 security definer
 set search_path=''
 as $$
-  select exists (
+  select auth.uid() is not null and exists (
     select 1
     from public.clinics c
     join public.subscriptions s on s.clinic_id=c.id
@@ -33,7 +33,8 @@ stable
 security definer
 set search_path=''
 as $$
-  select private.clinic_subscription_usable(p_clinic_id)
+  select auth.uid() is not null
+    and private.clinic_subscription_usable(p_clinic_id)
     and exists (
       select 1
       from public.subscriptions s
