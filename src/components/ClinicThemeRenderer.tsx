@@ -135,7 +135,7 @@ export default function ClinicThemeRenderer({ site, preview = false }: Props) {
         <div className="site-container">
           <h2 className="text-3xl font-bold mb-8">{journeyCopy.title}</h2>
           <div className="grid lg:grid-cols-3 gap-4">
-            {(journeyCopy.steps || []).map((item: any)=><div key={item.step} className="site-card p-6" style={{background:"var(--site-bg)"}}><div className="text-sm font-bold" style={{color:"var(--site-accent)"}}>{item.step}</div><h3 className="font-bold text-xl mt-4">{item.title}</h3><p className="text-sm mt-2" style={{color:"var(--site-muted)"}}>{item.text}</p></div>)}
+            {(journeyCopy.steps || []).map((item)=><div key={item.step} className="site-card p-6" style={{background:"var(--site-bg)"}}><div className="text-sm font-bold" style={{color:"var(--site-accent)"}}>{item.step}</div><h3 className="font-bold text-xl mt-4">{item.title}</h3><p className="text-sm mt-2" style={{color:"var(--site-muted)"}}>{item.text}</p></div>)}
           </div>
         </div>
       </section>
