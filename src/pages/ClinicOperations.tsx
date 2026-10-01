@@ -861,9 +861,11 @@ export function ClinicAppointments() {
 }
 
 export function ClinicTreatmentPlans() {
+  const { activeClinic } = useAuth();
+  const currency = activeClinic?.currency || "USD";
   const [plans, setPlans] = useState<TreatmentPlan[]>([]);
   useEffect(() => { clinicRepository.listTreatmentPlans().then(setPlans); }, []);
-  return <div className="space-y-5"><div><h2 className="text-xl font-bold" style={{ color: "var(--primary)", fontFamily: "'Cormorant Garamond', serif" }}>Treatment Plans</h2><p className="text-xs" style={muted}>Track proposed care from draft through approval and completion.</p></div><div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">{plans.map((plan) => <div key={plan.id} className="rounded-2xl border p-4" style={cardStyle}><div className="flex items-start justify-between gap-3"><div><div className="font-semibold">{plan.title}</div><div className="text-xs mt-1" style={muted}>{plan.patient ? `${plan.patient.first_name} ${plan.patient.last_name} · ${plan.patient.patient_no}` : "Patient record"}</div></div><StatusBadge tone={plan.status === "completed" ? "success" : plan.status === "approved" || plan.status === "in_progress" ? "primary" : "warning"}>{plan.status.replaceAll("_", " ")}</StatusBadge></div><div className="flex justify-between mt-5 pt-3 border-t" style={{ borderColor: "var(--border)" }}><span className="text-xs" style={muted}>Estimated</span><span className="font-bold">${Number(plan.estimated_total).toLocaleString()}</span></div></div>)}</div></div>;
+  return <div className="space-y-5"><div><h2 className="text-xl font-bold" style={{ color: "var(--primary)", fontFamily: "'Cormorant Garamond', serif" }}>Treatment Plans</h2><p className="text-xs" style={muted}>Track proposed care from draft through approval and completion.</p></div><div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">{plans.map((plan) => <div key={plan.id} className="rounded-2xl border p-4" style={cardStyle}><div className="flex items-start justify-between gap-3"><div><div className="font-semibold">{plan.title}</div><div className="text-xs mt-1" style={muted}>{plan.patient ? `${plan.patient.first_name} ${plan.patient.last_name} · ${plan.patient.patient_no}` : "Patient record"}</div></div><StatusBadge tone={plan.status === "completed" ? "success" : plan.status === "approved" || plan.status === "in_progress" ? "primary" : "warning"}>{plan.status.replaceAll("_", " ")}</StatusBadge></div><div className="flex justify-between mt-5 pt-3 border-t" style={{ borderColor: "var(--border)" }}><span className="text-xs" style={muted}>Estimated</span><span className="font-bold">{formatMoney(Number(plan.estimated_total), currency)}</span></div></div>)}</div></div>;
 }
 
 export function ClinicInventory() {
@@ -1040,6 +1042,8 @@ export function ClinicBookingRequests() {
 }
 
 export function ClinicDashboard() {
+  const { activeClinic } = useAuth();
+  const currency = activeClinic?.currency || "USD";
   const [summary, setSummary] = useState<Awaited<ReturnType<typeof clinicRepository.getDashboardSummary>> | null>(null);
   const [error, setError] = useState("");
   useEffect(() => { clinicRepository.getDashboardSummary().then(setSummary).catch((e) => setError(e instanceof Error ? e.message : "Unable to load dashboard.")); }, []);
@@ -1047,8 +1051,8 @@ export function ClinicDashboard() {
   const kpis = [
     ["Patients", summary.totalPatients, UserRound],
     ["Today's appointments", summary.todayAppointments, CalendarDays],
-    ["Monthly revenue", `$${summary.monthlyRevenue.toLocaleString()}`, FileText],
-    ["Outstanding", `$${summary.outstandingBalance.toLocaleString()}`, AlertTriangle],
+    ["Monthly revenue", formatMoney(summary.monthlyRevenue, currency), FileText],
+    ["Outstanding", formatMoney(summary.outstandingBalance, currency), AlertTriangle],
     ["Active booking requests", summary.activeLeads, ClipboardList],
     ["Low stock", summary.lowStock, Package],
   ] as const;
@@ -1075,7 +1079,8 @@ export function ClinicDoctors() {
 }
 
 export function ClinicServices() {
-  const { role } = useAuth();
+  const { role, activeClinic } = useAuth();
+  const currency = activeClinic?.currency || "USD";
   const [items, setItems] = useState<TreatmentCatalogItem[]>([]);
   const [show, setShow] = useState(false);
   const [error, setError] = useState("");
@@ -1085,7 +1090,7 @@ export function ClinicServices() {
   const submit = async (e: FormEvent) => { e.preventDefault(); setError(""); try { await clinicRepository.createTreatment({ code: form.code, name_en: form.name_en, name_ar: form.name_ar, duration_minutes: Number(form.duration_minutes), default_price: Number(form.default_price) }); setForm({ code: "", name_en: "", name_ar: "", duration_minutes: "30", default_price: "0" }); setShow(false); await load(); } catch (err) { setError(err instanceof Error ? err.message : "Unable to add treatment."); } };
   return <div className="space-y-5"><div className="flex items-end justify-between"><div><h2 className="text-xl font-bold" style={{ color: "var(--primary)", fontFamily: "'Cormorant Garamond', serif" }}>Treatments & Services</h2><p className="text-xs" style={muted}>Live treatment catalog used by appointments and billing.</p></div>{role === "admin" && <button onClick={() => setShow(!show)} className="px-3 py-2 rounded-xl text-sm font-semibold" style={{ background: "var(--primary)", color: "white" }}><Plus size={13} className="inline mr-1" />Add Treatment</button>}</div>
   {error && <div className="p-3 rounded-xl bg-red-50 text-red-700 text-sm">{error}</div>}{show && <form onSubmit={submit} className="rounded-2xl border p-4 grid md:grid-cols-5 gap-3" style={cardStyle}>{[["Code","code","text"],["English name","name_en","text"],["Arabic name","name_ar","text"],["Minutes","duration_minutes","number"],["Price","default_price","number"]].map(([label,key,type]) => <label key={key} className="text-xs font-semibold">{label}<input required={["code","name_en"].includes(key)} type={type} min={type === "number" ? "0" : undefined} value={form[key as keyof typeof form]} onChange={(e) => setForm({...form,[key]:e.target.value})} className="mt-1.5 w-full px-3 py-2.5 rounded-xl border bg-transparent text-sm" /></label>)}<div className="md:col-span-5 flex justify-end"><button className="px-4 py-2.5 rounded-xl text-sm font-semibold" style={{ background: "var(--accent)", color: "white" }}>Save Treatment</button></div></form>}
-  <div className="rounded-2xl border overflow-hidden" style={cardStyle}><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-sm"><thead><tr className="border-b text-left" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}><th className="px-4 py-3">Code</th><th className="px-4 py-3">Treatment</th><th className="px-4 py-3">Arabic</th><th className="px-4 py-3">Duration</th><th className="px-4 py-3">Default price</th></tr></thead><tbody>{items.map((item) => <tr key={item.id} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}><td className="px-4 py-3 font-semibold">{item.code}</td><td className="px-4 py-3">{item.name_en}</td><td className="px-4 py-3" dir="rtl">{item.name_ar || "—"}</td><td className="px-4 py-3">{item.duration_minutes} min</td><td className="px-4 py-3 font-bold">${Number(item.default_price).toLocaleString()}</td></tr>)}</tbody></table></div></div></div>;
+  <div className="rounded-2xl border overflow-hidden" style={cardStyle}><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-sm"><thead><tr className="border-b text-left" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}><th className="px-4 py-3">Code</th><th className="px-4 py-3">Treatment</th><th className="px-4 py-3">Arabic</th><th className="px-4 py-3">Duration</th><th className="px-4 py-3">Default price</th></tr></thead><tbody>{items.map((item) => <tr key={item.id} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}><td className="px-4 py-3 font-semibold">{item.code}</td><td className="px-4 py-3">{item.name_en}</td><td className="px-4 py-3" dir="rtl">{item.name_ar || "—"}</td><td className="px-4 py-3">{item.duration_minutes} min</td><td className="px-4 py-3 font-bold">{formatMoney(Number(item.default_price), currency)}</td></tr>)}</tbody></table></div></div></div>;
 }
 
 export function ClinicUsers() {
