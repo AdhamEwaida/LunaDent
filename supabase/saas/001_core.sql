@@ -145,14 +145,14 @@ on conflict (key) do update set
 
 insert into public.plans (code,name,description,price_monthly,currency,active,features,limits)
 values
-('starter','Starter','Core clinic operations and one website theme.',49,'USD',true,
+('starter','Starter','Core clinic operations, patient portal, booking and standard website themes.',49,'USD',true,
  '{"patients":true,"appointments":true,"website":true,"patient_portal":true,"accounting":false,"inventory":false,"custom_domain":false,"all_themes":false}'::jsonb,
  '{"locations":1,"dentists":2,"staff":3,"storage_gb":5}'::jsonb),
-('pro','Pro','Full clinic operations, all themes, accounting and inventory.',99,'USD',true,
- '{"patients":true,"appointments":true,"website":true,"patient_portal":true,"accounting":true,"inventory":true,"custom_domain":true,"all_themes":true}'::jsonb,
+('pro','Pro','Full single-clinic operations with all themes, accounting and inventory.',99,'USD',true,
+ '{"patients":true,"appointments":true,"website":true,"patient_portal":true,"accounting":true,"inventory":true,"custom_domain":false,"all_themes":true}'::jsonb,
  '{"locations":1,"dentists":10,"staff":20,"storage_gb":50}'::jsonb),
-('enterprise','Enterprise','Multi-location and advanced platform support.',249,'USD',true,
- '{"patients":true,"appointments":true,"website":true,"patient_portal":true,"accounting":true,"inventory":true,"custom_domain":true,"all_themes":true,"multi_location":true,"api":true}'::jsonb,
+('enterprise','Enterprise','Full clinic operations with higher staff and storage limits plus priority platform support.',249,'USD',true,
+ '{"patients":true,"appointments":true,"website":true,"patient_portal":true,"accounting":true,"inventory":true,"custom_domain":false,"all_themes":true,"multi_location":false,"api":false}'::jsonb,
  '{"locations":25,"dentists":100,"staff":500,"storage_gb":500}'::jsonb)
 on conflict (code) do update set
   name=excluded.name,
