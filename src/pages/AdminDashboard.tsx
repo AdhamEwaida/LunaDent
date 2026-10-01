@@ -116,6 +116,17 @@ function AdminSidebar({ open, setOpen }: { open: boolean; setOpen: (v: boolean) 
         </div>
 
         <div className="p-3 border-t space-y-1" style={{ borderColor: "rgba(255,255,255,0.1)" }}>
+          {entitlements?.plan && (
+            <div className="mb-2 rounded-xl border border-white/10 bg-white/[.06] px-3 py-2 text-white">
+              <div className="text-[10px] uppercase tracking-wider text-white/40">Current plan</div>
+              <div className="mt-0.5 flex items-center justify-between gap-2 text-xs">
+                <span className="font-semibold">{entitlements.plan.name}</span>
+                <span className={entitlements.usable ? "text-emerald-300" : "text-amber-300"}>
+                  {entitlements.usable ? "Active" : "Action needed"}
+                </span>
+              </div>
+            </div>
+          )}
           {role === "admin" && (
             <Link to="/admin/users" className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm"
               style={{
