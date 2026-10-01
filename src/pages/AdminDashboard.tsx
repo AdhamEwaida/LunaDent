@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, Users, Calendar, FileText, CreditCard, Star, Settings,
-  Menu, X, Bell, ChevronDown, TrendingUp, AlertCircle, CheckCircle2,
+  Menu, X, ChevronDown, TrendingUp, AlertCircle, CheckCircle2,
   Plus, Search, Filter, Eye, Edit, Trash2, Phone, Mail, MoreVertical,
   MessageSquare, Stethoscope, BookOpen, Image, BarChart3, LogOut, UserPlus,
   Clock, ArrowUp, ArrowDown, Smile, Briefcase, ClipboardList, Package, Palette
