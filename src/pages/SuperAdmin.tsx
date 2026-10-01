@@ -72,11 +72,14 @@ export default function SuperAdmin() {
     const mrr = clinics.reduce((sum, clinic) => {
       const subscription = Array.isArray(clinic.subscription) ? clinic.subscription[0] : clinic.subscription;
       const plan = subscription?.plan;
-      if (!subscription || !["active","trialing"].includes(subscription.status)) return sum;
+      if (!subscription || subscription.status !== "active") return sum;
       return sum + Number(plan?.price_monthly || 0);
     }, 0);
     return { total, active, trials, suspended, mrr };
   }, [clinics]);
+
+  const selectedProvisionPlan = plans.find((plan) => plan.code === form.plan_code) ?? null;
+  const provisionThemes = themes.filter((theme) => theme.key === "modern" || Boolean(selectedProvisionPlan?.features?.all_themes));
 
   const createClinic = async (event: FormEvent) => {
     event.preventDefault();
@@ -103,6 +106,29 @@ export default function SuperAdmin() {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to update clinic.");
+    }
+  };
+
+  const setPlan = async (clinic: ClinicRow, planCode: string) => {
+    setError("");
+    try {
+      await saasRepository.setClinicPlan(clinic.id, planCode);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update plan.");
+    }
+  };
+
+  const setSubscriptionStatus = async (
+    clinic: ClinicRow,
+    status: "trialing" | "active" | "past_due" | "canceled" | "suspended",
+  ) => {
+    setError("");
+    try {
+      await saasRepository.updateSubscriptionStatus(clinic.id, status);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update subscription.");
     }
   };
 
@@ -153,7 +179,7 @@ export default function SuperAdmin() {
             ["Active", stats.active],
             ["Trials", stats.trials],
             ["Suspended", stats.suspended],
-            ["Projected MRR", `$${stats.mrr.toFixed(0)}`],
+            ["Active MRR", `${stats.mrr.toFixed(0)}`],
           ].map(([label,value])=>(
             <div key={String(label)} className="rounded-2xl bg-white border p-5">
               <div className="text-xs text-slate-500">{label}</div>
@@ -183,11 +209,22 @@ export default function SuperAdmin() {
               </label>
               <label className="text-xs font-semibold">Starting theme
                 <select value={form.theme_key} onChange={e=>setForm({...form,theme_key:e.target.value})} className="mt-1.5 w-full px-3 py-2.5 rounded-xl border bg-white">
-                  {themes.map(theme=><option key={theme.key} value={theme.key}>{theme.name}{theme.premium?" · Premium":""}</option>)}
+                  {provisionThemes.map(theme=><option key={theme.key} value={theme.key}>{theme.name}{theme.premium?" · Premium":""}</option>)}
                 </select>
               </label>
               <label className="text-xs font-semibold">Plan
-                <select value={form.plan_code} onChange={e=>setForm({...form,plan_code:e.target.value})} className="mt-1.5 w-full px-3 py-2.5 rounded-xl border bg-white">
+                <select
+                  value={form.plan_code}
+                  onChange={e=>{
+                    const nextPlan = plans.find((plan)=>plan.code===e.target.value);
+                    setForm({
+                      ...form,
+                      plan_code:e.target.value,
+                      theme_key: nextPlan?.features?.all_themes ? form.theme_key : "modern",
+                    });
+                  }}
+                  className="mt-1.5 w-full px-3 py-2.5 rounded-xl border bg-white"
+                >
                   {plans.map(plan=><option key={plan.code} value={plan.code}>{plan.name} · {plan.currency} {Number(plan.price_monthly).toFixed(0)}/mo</option>)}
                 </select>
               </label>
@@ -209,7 +246,7 @@ export default function SuperAdmin() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1050px] text-sm">
               <thead className="bg-slate-50 text-slate-500 text-left">
-                <tr><th className="px-5 py-3">Clinic</th><th className="px-5 py-3">Theme</th><th className="px-5 py-3">Plan</th><th className="px-5 py-3">Website</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Actions</th></tr>
+                <tr><th className="px-5 py-3">Clinic</th><th className="px-5 py-3">Theme</th><th className="px-5 py-3">Plan</th><th className="px-5 py-3">Subscription</th><th className="px-5 py-3">Website</th><th className="px-5 py-3">Clinic status</th><th className="px-5 py-3">Actions</th></tr>
               </thead>
               <tbody>
                 {clinics.map(clinic=>{
@@ -219,7 +256,27 @@ export default function SuperAdmin() {
                   return <tr key={clinic.id} className="border-t">
                     <td className="px-5 py-4"><div className="font-semibold">{clinic.name}</div><div className="text-xs text-slate-500">/{clinic.slug}</div></td>
                     <td className="px-5 py-4 capitalize">{site?.theme_key || "—"}</td>
-                    <td className="px-5 py-4 capitalize">{subscription?.plan?.name || "—"}</td>
+                    <td className="px-5 py-4">
+                      <select
+                        value={subscription?.plan?.code || ""}
+                        onChange={e=>void setPlan(clinic,e.target.value)}
+                        className="min-w-32 rounded-lg border bg-white px-2 py-1.5 text-xs font-semibold"
+                        aria-label={"Plan for " + clinic.name}
+                      >
+                        {plans.map(plan=><option key={plan.code} value={plan.code}>{plan.name}</option>)}
+                      </select>
+                    </td>
+                    <td className="px-5 py-4">
+                      <select
+                        value={subscription?.status || "trialing"}
+                        onChange={e=>void setSubscriptionStatus(clinic,e.target.value as "trialing" | "active" | "past_due" | "canceled" | "suspended")}
+                        className="min-w-32 rounded-lg border bg-white px-2 py-1.5 text-xs font-semibold"
+                        aria-label={"Subscription status for " + clinic.name}
+                      >
+                        {["trialing","active","past_due","canceled","suspended"].map(status=><option key={status} value={status}>{status.replaceAll("_"," ")}</option>)}
+                      </select>
+                      {subscription?.trial_ends_at && <div className="mt-1 text-[10px] text-slate-500">Trial to {new Date(subscription.trial_ends_at).toLocaleDateString()}</div>}
+                    </td>
                     <td className="px-5 py-4">
                       <Link to={`/c/${clinic.slug}`} target="_blank" className="inline-flex items-center gap-1 text-violet-700 font-semibold">{site?.published?"Published":"Draft"}<ExternalLink size={13}/></Link>
                     </td>
