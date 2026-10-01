@@ -19,7 +19,6 @@ export type Clinic = {
   locale: string;
   onboarding_completed: boolean;
   logo_path?: string | null;
-  onboarding_completed?: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -137,4 +136,15 @@ export type PublicClinicSite = {
     duration_minutes: number;
     default_price: number;
   }>;
+};
+
+
+export type ClinicEntitlements = {
+  clinic_id: string;
+  clinic_status: ClinicStatus;
+  usable: boolean;
+  subscription_status: Subscription["status"] | "missing";
+  trial_ends_at?: string | null;
+  current_period_end?: string | null;
+  plan: SaasPlan | null;
 };
