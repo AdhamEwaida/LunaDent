@@ -196,6 +196,7 @@ revoke all on public.audit_logs from anon;
 revoke insert,update,delete on public.audit_logs from authenticated;
 grant select on public.audit_logs to authenticated;
 
+drop policy if exists audit_admin_read on public.audit_logs;
 drop policy if exists audit_logs_admin_read on public.audit_logs;
 drop policy if exists audit_logs_owner_read on public.audit_logs;
 create policy audit_logs_owner_read
