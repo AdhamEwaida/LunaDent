@@ -216,4 +216,14 @@ export const saasRepository = {
     if (error) throw error;
     if (data?.error) throw new Error(String(data.error));
   },
+
+  async updateSubscriptionStatus(clinicId: string, status: "trialing" | "active" | "past_due" | "canceled" | "suspended") {
+    const db = requireSupabase();
+    const { data, error } = await db.functions.invoke("manage-saas", {
+      body: { action: "update_subscription_status", clinic_id: clinicId, status },
+    });
+    if (error) throw error;
+    if (data?.error) throw new Error(String(data.error));
+    return data;
+  },
 };
