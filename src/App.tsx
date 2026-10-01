@@ -17,6 +17,8 @@ const SuperAdmin = lazy(() => import("@/pages/SuperAdmin"));
 const ClinicSite = lazy(() => import("@/pages/ClinicSite"));
 const ClinicBooking = lazy(() => import("@/pages/ClinicBooking"));
 const ClinicOnboarding = lazy(() => import("@/pages/ClinicOnboarding"));
+const PrivacyPolicy = lazy(() => import("@/pages/Legal").then((module) => ({ default: module.PrivacyPolicy })));
+const TermsOfService = lazy(() => import("@/pages/Legal").then((module) => ({ default: module.TermsOfService })));
 
 function NotFound() {
   return (
@@ -129,8 +131,8 @@ export default function App() {
               <Route path="/contact" element={<Navigate to="/" replace />} />
               <Route path="/journey" element={<Navigate to="/" replace />} />
               <Route path="/technology" element={<Navigate to="/" replace />} />
-              <Route path="/privacy" element={<Navigate to="/" replace />} />
-              <Route path="/terms" element={<Navigate to="/" replace />} />
+              <Route path="/privacy" element={<PrivacyPolicy />} />
+              <Route path="/terms" element={<TermsOfService />} />
 
               <Route path="*" element={<NotFound />} />
             </Routes>
