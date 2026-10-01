@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Auth context intentionally exports its consumer hook. */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
