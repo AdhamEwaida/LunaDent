@@ -20,21 +20,44 @@ type AdminClient = ReturnType<typeof createClient>;
 
 type BookingSettings = typeof DEFAULT_SETTINGS;
 
+type UnknownRecord = Record<string, unknown>;
+type PlanSummary = {
+  active?: boolean | null;
+  features?: Record<string, unknown> | null;
+};
+type SubscriptionSummary = {
+  status?: string | null;
+  trial_ends_at?: string | null;
+  current_period_end?: string | null;
+  plan?: PlanSummary | PlanSummary[] | null;
+};
+
+function asRecord(value: unknown): UnknownRecord | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as UnknownRecord
+    : null;
+}
+
 function clampNumber(value: unknown, fallback: number, min: number, max: number) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
 }
 
-function normalizeSettings(raw: any): BookingSettings {
-  const rawDays = Array.isArray(raw?.days) ? raw.days.map(Number).filter((day: number) => Number.isInteger(day) && day >= 0 && day <= 6) : [];
+function normalizeSettings(raw: unknown): BookingSettings {
+  const value = asRecord(raw) ?? {};
+  const rawDays = Array.isArray(value.days)
+    ? value.days.map(Number).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)
+    : [];
   const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
+  const start = typeof value.start === "string" ? value.start : "";
+  const end = typeof value.end === "string" ? value.end : "";
   return {
     days: rawDays.length ? Array.from(new Set(rawDays)) : DEFAULT_SETTINGS.days,
-    start: timePattern.test(String(raw?.start || "")) ? String(raw.start) : DEFAULT_SETTINGS.start,
-    end: timePattern.test(String(raw?.end || "")) ? String(raw.end) : DEFAULT_SETTINGS.end,
-    slotMinutes: clampNumber(raw?.slotMinutes, DEFAULT_SETTINGS.slotMinutes, 10, 120),
-    leadTimeHours: clampNumber(raw?.leadTimeHours, DEFAULT_SETTINGS.leadTimeHours, 0, 168),
-    horizonDays: clampNumber(raw?.horizonDays, DEFAULT_SETTINGS.horizonDays, 7, 365),
+    start: timePattern.test(start) ? start : DEFAULT_SETTINGS.start,
+    end: timePattern.test(end) ? end : DEFAULT_SETTINGS.end,
+    slotMinutes: clampNumber(value.slotMinutes, DEFAULT_SETTINGS.slotMinutes, 10, 120),
+    leadTimeHours: clampNumber(value.leadTimeHours, DEFAULT_SETTINGS.leadTimeHours, 0, 168),
+    horizonDays: clampNumber(value.horizonDays, DEFAULT_SETTINGS.horizonDays, 7, 365),
   };
 }
 
@@ -71,7 +94,7 @@ function appointmentBoundaryMinutes(iso: string, targetDate: string, timezone: s
   return local.minutes;
 }
 
-function subscriptionUsable(subscription: any) {
+function subscriptionUsable(subscription: SubscriptionSummary | null | undefined) {
   if (!subscription) return false;
   const now = Date.now();
   const plan = Array.isArray(subscription.plan) ? subscription.plan[0] : subscription.plan;
@@ -102,9 +125,10 @@ async function loadClinic(admin: AdminClient, slug: string) {
   if (subscriptionError) throw subscriptionError;
   if (!site?.published || !subscriptionUsable(subscription)) return null;
 
+  const content = asRecord(site.content);
   return {
     ...clinic,
-    settings: normalizeSettings((site.content as any)?.bookingSettings),
+    settings: normalizeSettings(content?.bookingSettings),
   };
 }
 
