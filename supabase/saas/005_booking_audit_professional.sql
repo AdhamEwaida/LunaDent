@@ -21,9 +21,25 @@ grant select on public.clinic_business_hours to anon,authenticated;
 grant insert,update,delete on public.clinic_business_hours to authenticated;
 
 drop policy if exists clinic_hours_public_read on public.clinic_business_hours;
+drop policy if exists clinic_hours_authenticated_read on public.clinic_business_hours;
+
 create policy clinic_hours_public_read
 on public.clinic_business_hours for select
-to anon,authenticated
+to anon
+using (
+  exists (
+    select 1
+    from public.clinics c
+    join public.clinic_site_settings s on s.clinic_id=c.id
+    where c.id=clinic_business_hours.clinic_id
+      and c.status in ('trialing'::public.clinic_status,'active'::public.clinic_status)
+      and s.published=true
+  )
+);
+
+create policy clinic_hours_authenticated_read
+on public.clinic_business_hours for select
+to authenticated
 using (
   exists (
     select 1
