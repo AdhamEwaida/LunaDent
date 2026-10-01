@@ -296,7 +296,9 @@ using (
   )
   or exists (
     select 1 from public.patients p
-    where p.id=patient_id and p.clinic_id=clinic_id and p.auth_user_id=(select auth.uid())
+    where p.id=public.invoices.patient_id
+      and p.clinic_id=public.invoices.clinic_id
+      and p.auth_user_id=(select auth.uid())
   )
 );
 drop policy if exists invoices_finance_insert on public.invoices;
@@ -333,7 +335,9 @@ using (
     select 1
     from public.invoices i
     join public.patients p on p.id=i.patient_id and p.clinic_id=i.clinic_id
-    where i.id=invoice_id and i.clinic_id=clinic_id and p.auth_user_id=(select auth.uid())
+    where i.id=public.invoice_items.invoice_id
+      and i.clinic_id=public.invoice_items.clinic_id
+      and p.auth_user_id=(select auth.uid())
   )
 );
 drop policy if exists invoice_items_finance_insert on public.invoice_items;
@@ -368,7 +372,9 @@ using (
   )
   or exists (
     select 1 from public.patients p
-    where p.id=patient_id and p.clinic_id=clinic_id and p.auth_user_id=(select auth.uid())
+    where p.id=public.payments.patient_id
+      and p.clinic_id=public.payments.clinic_id
+      and p.auth_user_id=(select auth.uid())
   )
 );
 drop policy if exists payments_finance_insert on public.payments;
