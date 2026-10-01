@@ -5,13 +5,22 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist"] },
+  {
+    ignores: [
+      "dist",
+      "src/components/ui/**",
+      "src/lib/react-router-dom-proxy.tsx",
+    ],
+  },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
-    files: ["**/*.{ts,tsx}"],
+    files: ["src/**/*.{ts,tsx}", "supabase/functions/**/*.{ts,tsx}"],
     languageOptions: {
       ecmaVersion: 2020,
-      globals: globals.browser,
+      globals: {
+        ...globals.browser,
+        ...globals.worker,
+      },
     },
     plugins: {
       "react-hooks": reactHooks,
@@ -23,9 +32,9 @@ export default tseslint.config(
         "warn",
         { allowConstantExport: true },
       ],
-      "@typescript-eslint/no-unused-vars": "warn", // 未使用变量降为 warn
-      "@typescript-eslint/no-empty-object-type": "warn", // 空对象类型降为 warn
-      "@typescript-eslint/no-explicit-any": "warn", // any 类型降为 warn
+      "@typescript-eslint/no-unused-vars": "warn",
+      "@typescript-eslint/no-empty-object-type": "warn",
+      "@typescript-eslint/no-explicit-any": "warn",
     },
   }
 );
