@@ -93,7 +93,12 @@ export default function StaffLogin() {
             />
           </div>
 
-          <label className="text-xs font-semibold block mb-1">Password</label>
+          <div className="mb-1 flex items-center justify-between gap-3">
+            <label className="text-xs font-semibold">Password</label>
+            <Link to="/auth/reset-password?next=%2Fstaff%2Flogin" className="text-xs font-semibold" style={{ color: "var(--accent)" }}>
+              Forgot password?
+            </Link>
+          </div>
           <div className="relative mb-5">
             <LockKeyhole size={15} className="absolute left-3 top-3.5 opacity-50" />
             <input
