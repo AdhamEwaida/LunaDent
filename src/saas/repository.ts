@@ -1,6 +1,8 @@
 import { supabase } from "@/lib/supabase";
 import type {
   Clinic,
+  ClinicBusinessHour,
+  ClinicCommercialRow,
   ClinicMembership,
   ClinicSiteSettings,
   PublicClinicSite,
@@ -84,6 +86,36 @@ export const saasRepository = {
     return data as ClinicSiteSettings;
   },
 
+  async listBusinessHours(clinicId: string): Promise<ClinicBusinessHour[]> {
+    const db = requireSupabase();
+    const { data, error } = await db
+      .from("clinic_business_hours")
+      .select("*")
+      .eq("clinic_id", clinicId)
+      .order("weekday");
+    if (error) throw error;
+    return (data ?? []) as ClinicBusinessHour[];
+  },
+
+  async saveBusinessHours(clinicId: string, rows: ClinicBusinessHour[]): Promise<ClinicBusinessHour[]> {
+    const db = requireSupabase();
+    const payload = rows.map((row) => ({
+      clinic_id: clinicId,
+      weekday: row.weekday,
+      enabled: row.enabled,
+      open_time: row.enabled ? row.open_time : null,
+      close_time: row.enabled ? row.close_time : null,
+      slot_minutes: row.slot_minutes,
+    }));
+    const { data, error } = await db
+      .from("clinic_business_hours")
+      .upsert(payload, { onConflict: "clinic_id,weekday" })
+      .select("*")
+      .order("weekday");
+    if (error) throw error;
+    return (data ?? []) as ClinicBusinessHour[];
+  },
+
   async updateSiteSettings(clinicId: string, patch: Partial<ClinicSiteSettings>): Promise<ClinicSiteSettings> {
     const db = requireSupabase();
     const safePatch = {
@@ -139,14 +171,14 @@ export const saasRepository = {
     return db.storage.from("clinic-assets").getPublicUrl(path).data.publicUrl;
   },
 
-  async listAllClinics(): Promise<Array<Clinic & { subscription?: any; site?: any }>> {
+  async listAllClinics(): Promise<ClinicCommercialRow[]> {
     const db = requireSupabase();
     const { data, error } = await db
       .from("clinics")
       .select("*, subscription:subscriptions(*,plan:plans(*)), site:clinic_site_settings(theme_key,published,custom_domain)")
       .order("created_at", { ascending: false });
     if (error) throw error;
-    return (data ?? []) as Array<Clinic & { subscription?: any; site?: any }>;
+    return (data ?? []) as unknown as ClinicCommercialRow[];
   },
 
   async createClinic(input: {
@@ -183,5 +215,15 @@ export const saasRepository = {
     });
     if (error) throw error;
     if (data?.error) throw new Error(String(data.error));
+  },
+
+  async updateSubscriptionStatus(clinicId: string, status: "trialing" | "active" | "past_due" | "canceled" | "suspended") {
+    const db = requireSupabase();
+    const { data, error } = await db.functions.invoke("manage-saas", {
+      body: { action: "update_subscription_status", clinic_id: clinicId, status },
+    });
+    if (error) throw error;
+    if (data?.error) throw new Error(String(data.error));
+    return data;
   },
 };

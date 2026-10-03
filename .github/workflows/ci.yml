@@ -31,8 +31,19 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
+      - name: Lint product code
+        run: npm run lint
+
       - name: TypeScript
         run: npx tsc --noEmit
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Check and test Supabase Edge Functions
+        run: npm run test:edge-functions
 
       - name: Production build
         run: npm run build

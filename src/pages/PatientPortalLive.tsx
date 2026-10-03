@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { CalendarDays, CreditCard, FileText, Home, LogOut, ReceiptText, ShieldCheck, Stethoscope, UserRound } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
@@ -87,10 +87,18 @@ function PatientLogin({ site }: { site: PublicClinicSite }) {
             <input required type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)}
               className="mt-1.5 mb-4 w-full px-3 py-3 rounded-xl border bg-transparent text-sm" />
           </label>
-          <label className="text-xs font-semibold">Password
-            <input required type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)}
-              className="mt-1.5 mb-5 w-full px-3 py-3 rounded-xl border bg-transparent text-sm" />
-          </label>
+          <div className="flex items-center justify-between gap-3">
+            <label className="text-xs font-semibold">Password</label>
+            <Link
+              to={`/auth/reset-password?next=${encodeURIComponent(`/c/${clinicSlug}/patient/login`)}`}
+              className="text-xs font-semibold"
+              style={{ color: site.settings.tokens?.colors?.primary || "#2457C5" }}
+            >
+              Forgot password?
+            </Link>
+          </div>
+          <input required type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)}
+            className="mt-1.5 mb-5 w-full px-3 py-3 rounded-xl border bg-transparent text-sm" />
           <button disabled={loading} className="w-full py-3 rounded-xl text-sm font-semibold text-white"
             style={{ background: site.settings.tokens?.colors?.primary || "#2457C5" }}>
             {loading ? "Signing in..." : "Sign In to Patient Portal"}
@@ -162,7 +170,7 @@ export default function PatientPortalLive() {
       .finally(() => active && setLoading(false));
 
     return () => { active = false; };
-  }, [clinicSlug, user?.id]);
+  }, [clinicSlug, user]);
 
   if (!clinicSlug) {
     return (

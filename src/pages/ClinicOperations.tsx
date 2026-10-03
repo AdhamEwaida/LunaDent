@@ -1,18 +1,26 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   Activity, AlertTriangle, CalendarDays, CheckCircle2, ChevronRight, ClipboardList,
-  FileText, HeartPulse, Package, Plus, Search, Stethoscope, UserRound, X
+  Eye, FileText, HeartPulse, Package, Plus, Search, Stethoscope, Trash2, Upload, UserRound, X
 } from "lucide-react";
 import { clinicRepository } from "@/clinic/repository";
 import { useAuth } from "@/auth/AuthContext";
 import type {
   Appointment, ClinicalNote, DentalChartEntry, InventoryItem, Patient, ToothCondition,
-  TreatmentPlan, Invoice, Doctor, TreatmentCatalogItem, BookingRequest
+  TreatmentPlan, TreatmentPlanItem, Invoice, Doctor, TreatmentCatalogItem, BookingRequest, PatientDocument
 } from "@/clinic/types";
 
 const cardStyle = { background: "var(--card)", borderColor: "var(--border)" };
 const muted = { color: "var(--muted-foreground)" };
+
+function formatMoney(value: number, currency = "USD") {
+  try {
+    return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 2 }).format(Number(value) || 0);
+  } catch {
+    return currency + " " + Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+  }
+}
 
 function StatusBadge({ children, tone = "neutral" }: { children: React.ReactNode; tone?: "neutral" | "success" | "warning" | "danger" | "primary" }) {
   const tones = {
@@ -44,15 +52,15 @@ export function ClinicPatients() {
   const [error, setError] = useState("");
   const [form, setForm] = useState({ first_name: "", last_name: "", phone: "", email: "", date_of_birth: "" });
 
-  const load = async (search = query) => {
+  const load = useCallback(async (search = "") => {
     setLoading(true);
     setError("");
     try { setPatients(await clinicRepository.listPatients(search)); }
     catch (err) { setError(err instanceof Error ? err.message : "Failed to load patients."); }
     finally { setLoading(false); }
-  };
+  }, []);
 
-  useEffect(() => { void load(""); }, []);
+  useEffect(() => { void load(""); }, [load]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -140,8 +148,10 @@ function DentalChart({ patientId }: { patientId: string }) {
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const load = async () => setEntries(await clinicRepository.listDentalChart(patientId));
-  useEffect(() => { void load(); }, [patientId]);
+  const load = useCallback(async () => {
+    setEntries(await clinicRepository.listDentalChart(patientId));
+  }, [patientId]);
+  useEffect(() => { void load(); }, [load]);
 
   const latest = useMemo(() => {
     const map = new Map<number, DentalChartEntry>();
@@ -180,21 +190,342 @@ function DentalChart({ patientId }: { patientId: string }) {
 }
 
 function TreatmentPlansTab({ patientId }: { patientId: string }) {
+  const { role, activeClinic } = useAuth();
+  const currency = activeClinic?.currency || "USD";
+  const canManage = role === "admin" || role === "dentist";
   const [plans, setPlans] = useState<TreatmentPlan[]>([]);
-  const [show, setShow] = useState(false);
+  const [items, setItems] = useState<TreatmentPlanItem[]>([]);
+  const [treatments, setTreatments] = useState<TreatmentCatalogItem[]>([]);
+  const [selectedPlanId, setSelectedPlanId] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const [showAddItem, setShowAddItem] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
   const [title, setTitle] = useState("");
-  const [total, setTotal] = useState("");
-  const load = async () => setPlans(await clinicRepository.listTreatmentPlans(patientId));
-  useEffect(() => { void load(); }, [patientId]);
-  const create = async (event: FormEvent) => { event.preventDefault(); await clinicRepository.createTreatmentPlan({ patient_id: patientId, title, estimated_total: Number(total) || 0, status: "draft" }); setTitle(""); setTotal(""); setShow(false); await load(); };
-  return <div className="space-y-4"><div className="flex justify-end"><button onClick={() => setShow((v) => !v)} className="px-3 py-2 rounded-xl text-sm font-semibold" style={{ background: "var(--primary)", color: "white" }}><Plus size={13} className="inline mr-1" />New Plan</button></div>{show && <form onSubmit={create} className="rounded-2xl border p-4 grid md:grid-cols-[1fr_180px_auto] gap-3" style={cardStyle}><input required value={title} onChange={(e) => setTitle(e.target.value)} className="px-3 py-2.5 rounded-xl border bg-transparent" placeholder="Treatment plan title" /><input value={total} onChange={(e) => setTotal(e.target.value)} type="number" min="0" className="px-3 py-2.5 rounded-xl border bg-transparent" placeholder="Estimated total" /><button className="px-4 py-2 rounded-xl text-sm font-semibold" style={{ background: "var(--accent)", color: "white" }}>Create</button></form>}{plans.length === 0 ? <EmptyState icon={ClipboardList} title="No treatment plans" description="Create a plan to track proposed and completed dental care." /> : <div className="grid md:grid-cols-2 gap-3">{plans.map((plan) => <div key={plan.id} className="rounded-2xl border p-4" style={cardStyle}><div className="flex justify-between gap-3"><div><div className="font-semibold">{plan.title}</div><div className="text-xs mt-1" style={muted}>{plan.notes || "No notes"}</div></div><StatusBadge tone={plan.status === "completed" ? "success" : plan.status === "approved" || plan.status === "in_progress" ? "primary" : "warning"}>{plan.status.replaceAll("_", " ")}</StatusBadge></div><div className="mt-4 pt-3 border-t flex justify-between text-sm" style={{ borderColor: "var(--border)" }}><span style={muted}>Estimated total</span><span className="font-bold">${Number(plan.estimated_total).toLocaleString()}</span></div></div>)}</div>}</div>;
+  const [notes, setNotes] = useState("");
+  const [itemForm, setItemForm] = useState({
+    treatment_id: "",
+    tooth_no: "",
+    description: "",
+    quantity: "1",
+    unit_price: "0",
+    discount: "0",
+  });
+
+  const loadPlans = useCallback(async (preferredId?: string) => {
+    const rows = await clinicRepository.listTreatmentPlans(patientId);
+    setPlans(rows);
+    setSelectedPlanId((current) => {
+      const candidate = preferredId || current;
+      return rows.some((plan) => plan.id === candidate) ? candidate : rows[0]?.id || "";
+    });
+  }, [patientId]);
+
+  const loadItems = useCallback(async (planId: string) => {
+    if (!planId) {
+      setItems([]);
+      return;
+    }
+    setItems(await clinicRepository.listTreatmentPlanItems(planId));
+  }, []);
+
+  useEffect(() => {
+    void Promise.all([
+      loadPlans(),
+      clinicRepository.listTreatments().then(setTreatments),
+    ]).catch((err) => setError(err instanceof Error ? err.message : "Unable to load treatment plans."));
+  }, [loadPlans]);
+
+  useEffect(() => {
+    void loadItems(selectedPlanId).catch((err) => setError(err instanceof Error ? err.message : "Unable to load plan items."));
+  }, [loadItems, selectedPlanId]);
+
+  const selectedPlan = plans.find((plan) => plan.id === selectedPlanId) || null;
+
+  const create = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!canManage) return;
+    setSaving(true);
+    setError("");
+    try {
+      const created = await clinicRepository.createTreatmentPlan({
+        patient_id: patientId,
+        title: title.trim(),
+        notes: notes.trim() || null,
+        status: "draft",
+      });
+      setTitle("");
+      setNotes("");
+      setShowCreate(false);
+      await loadPlans(created.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to create treatment plan.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addItem = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!selectedPlan || !canManage) return;
+    setSaving(true);
+    setError("");
+    try {
+      await clinicRepository.createTreatmentPlanItem({
+        treatment_plan_id: selectedPlan.id,
+        treatment_id: itemForm.treatment_id || null,
+        tooth_no: itemForm.tooth_no ? Number(itemForm.tooth_no) : null,
+        description: itemForm.description,
+        quantity: Number(itemForm.quantity),
+        unit_price: Number(itemForm.unit_price),
+        discount: Number(itemForm.discount) || 0,
+      });
+      setItemForm({ treatment_id: "", tooth_no: "", description: "", quantity: "1", unit_price: "0", discount: "0" });
+      setShowAddItem(false);
+      await Promise.all([loadItems(selectedPlan.id), loadPlans(selectedPlan.id)]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to add treatment item.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateItemStatus = async (item: TreatmentPlanItem, status: TreatmentPlanItem["status"]) => {
+    setError("");
+    try {
+      await clinicRepository.updateTreatmentPlanItemStatus(item.id, status);
+      await Promise.all([loadItems(selectedPlanId), loadPlans(selectedPlanId)]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update treatment item.");
+    }
+  };
+
+  const deleteItem = async (item: TreatmentPlanItem) => {
+    setError("");
+    try {
+      await clinicRepository.deleteTreatmentPlanItem(item.id);
+      await Promise.all([loadItems(selectedPlanId), loadPlans(selectedPlanId)]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to remove treatment item.");
+    }
+  };
+
+  const transitions: Record<TreatmentPlan["status"], TreatmentPlan["status"][]> = {
+    draft: ["proposed", "cancelled"],
+    proposed: ["draft", "approved", "cancelled"],
+    approved: ["in_progress", "cancelled"],
+    in_progress: ["completed", "cancelled"],
+    completed: [],
+    cancelled: [],
+  };
+
+  const changePlanStatus = async (status: TreatmentPlan["status"]) => {
+    if (!selectedPlan) return;
+    setSaving(true);
+    setError("");
+    try {
+      await clinicRepository.setTreatmentPlanStatus(selectedPlan.id, status);
+      await loadPlans(selectedPlan.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update treatment plan status.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const selectTreatment = (treatmentId: string) => {
+    const treatment = treatments.find((row) => row.id === treatmentId);
+    setItemForm((current) => ({
+      ...current,
+      treatment_id: treatmentId,
+      description: treatment?.name_en || current.description,
+      unit_price: treatment ? String(treatment.default_price) : current.unit_price,
+    }));
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+        <div>
+          <h3 className="font-semibold">Treatment Plans</h3>
+          <p className="text-xs mt-1" style={muted}>Build itemized care plans, track approval, and follow each procedure through completion.</p>
+        </div>
+        {canManage && (
+          <button onClick={() => setShowCreate((value) => !value)} className="px-3 py-2 rounded-xl text-sm font-semibold" style={{ background: "var(--primary)", color: "white" }}>
+            <Plus size={13} className="inline mr-1" />New Plan
+          </button>
+        )}
+      </div>
+
+      {error && <div role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+
+      {showCreate && canManage && (
+        <form onSubmit={create} className="rounded-2xl border p-4 grid md:grid-cols-[1fr_1fr_auto] gap-3" style={cardStyle}>
+          <input required maxLength={160} value={title} onChange={(event) => setTitle(event.target.value)} className="px-3 py-2.5 rounded-xl border bg-transparent" placeholder="Treatment plan title" />
+          <input maxLength={500} value={notes} onChange={(event) => setNotes(event.target.value)} className="px-3 py-2.5 rounded-xl border bg-transparent" placeholder="Plan notes (optional)" />
+          <button disabled={saving} className="px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-50" style={{ background: "var(--accent)", color: "white" }}>
+            {saving ? "Creating..." : "Create"}
+          </button>
+        </form>
+      )}
+
+      {plans.length === 0 ? (
+        <EmptyState icon={ClipboardList} title="No treatment plans" description={canManage ? "Create the first itemized care plan for this patient." : "No treatment plans have been created for this patient."} />
+      ) : (
+        <div className="grid xl:grid-cols-[300px_1fr] gap-4 items-start">
+          <div className="space-y-2">
+            {plans.map((plan) => (
+              <button
+                key={plan.id}
+                onClick={() => setSelectedPlanId(plan.id)}
+                className="w-full rounded-2xl border p-4 text-left"
+                style={{
+                  ...cardStyle,
+                  boxShadow: selectedPlanId === plan.id ? "0 0 0 2px var(--primary)" : undefined,
+                }}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="font-semibold">{plan.title}</div>
+                  <StatusBadge tone={plan.status === "completed" ? "success" : plan.status === "cancelled" ? "danger" : plan.status === "approved" || plan.status === "in_progress" ? "primary" : "warning"}>
+                    {plan.status.replaceAll("_", " ")}
+                  </StatusBadge>
+                </div>
+                <div className="mt-3 text-lg font-bold">{formatMoney(Number(plan.estimated_total), currency)}</div>
+                <div className="text-[11px] mt-1" style={muted}>{new Date(plan.created_at).toLocaleDateString()}</div>
+              </button>
+            ))}
+          </div>
+
+          {selectedPlan && (
+            <div className="rounded-2xl border overflow-hidden" style={cardStyle}>
+              <div className="p-4 border-b flex flex-col lg:flex-row lg:items-start justify-between gap-3" style={{ borderColor: "var(--border)" }}>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h4 className="text-lg font-bold">{selectedPlan.title}</h4>
+                    <StatusBadge tone={selectedPlan.status === "completed" ? "success" : selectedPlan.status === "cancelled" ? "danger" : selectedPlan.status === "approved" || selectedPlan.status === "in_progress" ? "primary" : "warning"}>
+                      {selectedPlan.status.replaceAll("_", " ")}
+                    </StatusBadge>
+                  </div>
+                  <p className="text-xs mt-1" style={muted}>{selectedPlan.notes || "No plan notes."}</p>
+                  {selectedPlan.approved_at && <p className="text-[11px] mt-1" style={muted}>Approved {new Date(selectedPlan.approved_at).toLocaleString()}</p>}
+                </div>
+                {canManage && (
+                  <div className="flex flex-wrap gap-2">
+                    {transitions[selectedPlan.status].map((status) => (
+                      <button key={status} disabled={saving} onClick={() => void changePlanStatus(status)} className="px-3 py-2 rounded-xl border text-xs font-semibold capitalize disabled:opacity-50">
+                        {status.replaceAll("_", " ")}
+                      </button>
+                    ))}
+                    {!["completed", "cancelled"].includes(selectedPlan.status) && (
+                      <button onClick={() => setShowAddItem((value) => !value)} className="px-3 py-2 rounded-xl text-xs font-semibold text-white" style={{ background: "var(--primary)" }}>
+                        <Plus size={12} className="inline mr-1" />Add item
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {showAddItem && canManage && !["completed", "cancelled"].includes(selectedPlan.status) && (
+                <form onSubmit={addItem} className="p-4 border-b grid md:grid-cols-2 xl:grid-cols-6 gap-3" style={{ borderColor: "var(--border)" }}>
+                  <label className="text-xs font-semibold xl:col-span-2">Treatment
+                    <select value={itemForm.treatment_id} onChange={(event) => selectTreatment(event.target.value)} className="mt-1.5 w-full rounded-xl border bg-transparent px-3 py-2.5 text-sm">
+                      <option value="">Custom procedure</option>
+                      {treatments.map((treatment) => <option key={treatment.id} value={treatment.id}>{treatment.name_en}</option>)}
+                    </select>
+                  </label>
+                  <label className="text-xs font-semibold xl:col-span-2">Description
+                    <input required maxLength={240} value={itemForm.description} onChange={(event) => setItemForm({ ...itemForm, description: event.target.value })} className="mt-1.5 w-full rounded-xl border bg-transparent px-3 py-2.5 text-sm" />
+                  </label>
+                  <label className="text-xs font-semibold">Tooth
+                    <input type="number" min="11" max="48" value={itemForm.tooth_no} onChange={(event) => setItemForm({ ...itemForm, tooth_no: event.target.value })} className="mt-1.5 w-full rounded-xl border bg-transparent px-3 py-2.5 text-sm" placeholder="e.g. 26" />
+                  </label>
+                  <label className="text-xs font-semibold">Qty
+                    <input required type="number" min="0.01" step="0.01" value={itemForm.quantity} onChange={(event) => setItemForm({ ...itemForm, quantity: event.target.value })} className="mt-1.5 w-full rounded-xl border bg-transparent px-3 py-2.5 text-sm" />
+                  </label>
+                  <label className="text-xs font-semibold">Unit price
+                    <input required type="number" min="0" step="0.01" value={itemForm.unit_price} onChange={(event) => setItemForm({ ...itemForm, unit_price: event.target.value })} className="mt-1.5 w-full rounded-xl border bg-transparent px-3 py-2.5 text-sm" />
+                  </label>
+                  <label className="text-xs font-semibold">Discount
+                    <input type="number" min="0" step="0.01" value={itemForm.discount} onChange={(event) => setItemForm({ ...itemForm, discount: event.target.value })} className="mt-1.5 w-full rounded-xl border bg-transparent px-3 py-2.5 text-sm" />
+                  </label>
+                  <div className="md:col-span-2 xl:col-span-4 flex items-end justify-end gap-2">
+                    <button type="button" onClick={() => setShowAddItem(false)} className="rounded-xl border px-3 py-2.5 text-sm">Cancel</button>
+                    <button disabled={saving} className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50" style={{ background: "var(--accent)" }}>
+                      {saving ? "Saving..." : "Add procedure"}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {items.length === 0 ? (
+                <div className="p-8 text-center text-sm" style={muted}>No procedures in this plan yet.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[900px] text-sm">
+                    <thead>
+                      <tr className="text-left border-b" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>
+                        <th className="px-4 py-3">Procedure</th>
+                        <th className="px-4 py-3">Tooth</th>
+                        <th className="px-4 py-3">Qty</th>
+                        <th className="px-4 py-3">Unit price</th>
+                        <th className="px-4 py-3">Discount</th>
+                        <th className="px-4 py-3">Net</th>
+                        <th className="px-4 py-3">Status</th>
+                        {canManage && <th className="px-4 py-3"></th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((item) => (
+                        <tr key={item.id} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}>
+                          <td className="px-4 py-3 font-semibold">{item.description}</td>
+                          <td className="px-4 py-3">{item.tooth_no || "—"}</td>
+                          <td className="px-4 py-3">{Number(item.quantity)}</td>
+                          <td className="px-4 py-3">{formatMoney(Number(item.unit_price), currency)}</td>
+                          <td className="px-4 py-3">{formatMoney(Number(item.discount), currency)}</td>
+                          <td className="px-4 py-3 font-bold">{formatMoney(Math.max(Number(item.quantity) * Number(item.unit_price) - Number(item.discount), 0), currency)}</td>
+                          <td className="px-4 py-3">
+                            {canManage && !["completed", "cancelled"].includes(selectedPlan.status) ? (
+                              <select value={item.status} onChange={(event) => void updateItemStatus(item, event.target.value as TreatmentPlanItem["status"])} className="rounded-lg border bg-transparent px-2 py-1.5 text-xs">
+                                <option value="planned">Planned</option>
+                                <option value="in_progress">In progress</option>
+                                <option value="completed">Completed</option>
+                                <option value="cancelled">Cancelled</option>
+                              </select>
+                            ) : <StatusBadge tone={item.status === "completed" ? "success" : item.status === "cancelled" ? "danger" : "primary"}>{item.status.replaceAll("_", " ")}</StatusBadge>}
+                          </td>
+                          {canManage && <td className="px-4 py-3 text-right">
+                            {selectedPlan.status === "draft" && (
+                              <button onClick={() => void deleteItem(item)} className="p-2 rounded-lg text-red-600 hover:bg-red-50" aria-label={"Remove " + item.description}>
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </td>}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <div className="p-4 border-t flex flex-wrap justify-end gap-6 text-sm" style={{ borderColor: "var(--border)" }}>
+                <div><span style={muted}>Discounts </span><b>{formatMoney(Number(selectedPlan.discount_total), currency)}</b></div>
+                <div><span style={muted}>Plan total </span><b className="text-lg">{formatMoney(Number(selectedPlan.estimated_total), currency)}</b></div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ClinicalNotesTab({ patientId }: { patientId: string }) {
   const [notes, setNotes] = useState<ClinicalNote[]>([]);
   const [text, setText] = useState("");
-  const load = async () => setNotes(await clinicRepository.listClinicalNotes(patientId));
-  useEffect(() => { void load(); }, [patientId]);
+  const load = useCallback(async () => {
+    setNotes(await clinicRepository.listClinicalNotes(patientId));
+  }, [patientId]);
+  useEffect(() => { void load(); }, [load]);
   const add = async (event: FormEvent) => { event.preventDefault(); if (!text.trim()) return; await clinicRepository.createClinicalNote(patientId, text.trim()); setText(""); await load(); };
   return <div className="space-y-4"><form onSubmit={add} className="rounded-2xl border p-4" style={cardStyle}><label className="text-xs font-semibold">New clinical note<textarea value={text} onChange={(e) => setText(e.target.value)} rows={4} className="mt-2 w-full px-3 py-2.5 rounded-xl border bg-transparent text-sm resize-none" placeholder="Diagnosis, procedure, progress, follow-up..." /></label><div className="text-right mt-2"><button className="px-4 py-2 rounded-xl text-sm font-semibold" style={{ background: "var(--primary)", color: "white" }}>Add Note</button></div></form>{notes.map((note) => <div key={note.id} className="rounded-2xl border p-4" style={cardStyle}><div className="flex justify-between gap-3 mb-2"><StatusBadge tone="primary">{note.note_type}</StatusBadge><span className="text-xs" style={muted}>{new Date(note.created_at).toLocaleString()}</span></div><p className="text-sm leading-6">{note.note}</p></div>)}{notes.length === 0 && <EmptyState icon={FileText} title="No clinical notes" description="Clinical notes will appear in chronological order." />}</div>;
 }
@@ -206,19 +537,252 @@ function AppointmentsTab({ patientId }: { patientId: string }) {
 }
 
 
+function DocumentsTab({ patientId }: { patientId: string }) {
+  const { role } = useAuth();
+  const canManage = role === "admin" || role === "dentist" || role === "receptionist";
+  const canDelete = role === "admin" || role === "dentist";
+  const [documents, setDocuments] = useState<PatientDocument[]>([]);
+  const [showUpload, setShowUpload] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [title, setTitle] = useState("");
+  const [documentType, setDocumentType] = useState("other");
+  const [patientVisible, setPatientVisible] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    setError("");
+    try {
+      setDocuments(await clinicRepository.listPatientDocuments(patientId, undefined, false));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to load documents.");
+    }
+  }, [patientId]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const upload = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!file || !canManage) return;
+    setSaving(true);
+    setError("");
+    try {
+      await clinicRepository.uploadPatientDocument({
+        patient_id: patientId,
+        file,
+        title: title.trim() || file.name,
+        document_type: documentType,
+        patient_visible: patientVisible,
+      });
+      setFile(null);
+      setTitle("");
+      setDocumentType("other");
+      setPatientVisible(false);
+      setShowUpload(false);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to upload document.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openDocument = async (document: PatientDocument) => {
+    setError("");
+    try {
+      const url = await clinicRepository.createPatientDocumentUrl(document.storage_path);
+      if (!url) throw new Error("Document link could not be created.");
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to open document.");
+    }
+  };
+
+  const toggleVisibility = async (document: PatientDocument) => {
+    setError("");
+    try {
+      await clinicRepository.updatePatientDocumentVisibility(document.id, !document.patient_visible);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update document visibility.");
+    }
+  };
+
+  const removeDocument = async (document: PatientDocument) => {
+    setSaving(true);
+    setError("");
+    try {
+      await clinicRepository.deletePatientDocument(document);
+      setPendingDelete("");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to delete document.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const formatSize = (bytes?: number | null) => {
+    if (!bytes) return "Size unavailable";
+    if (bytes < 1024 * 1024) return Math.max(1, Math.round(bytes / 1024)) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+        <div>
+          <h3 className="font-semibold">Patient Documents</h3>
+          <p className="text-xs mt-1" style={muted}>Private clinical files with explicit patient-portal visibility.</p>
+        </div>
+        {canManage && (
+          <button onClick={() => setShowUpload((value) => !value)} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold text-white" style={{ background: "var(--primary)" }}>
+            <Upload size={14} />Upload Document
+          </button>
+        )}
+      </div>
+
+      {error && <div role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+
+      {showUpload && canManage && (
+        <form onSubmit={upload} className="rounded-2xl border p-4 grid md:grid-cols-2 gap-4" style={cardStyle}>
+          <label className="text-xs font-semibold">
+            File
+            <input
+              required
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.webp,.dcm,.docx,application/pdf,image/jpeg,image/png,image/webp,application/dicom,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              onChange={(event) => {
+                const selected = event.target.files?.[0] || null;
+                setFile(selected);
+                if (selected && !title) setTitle(selected.name.replace(/\.[^.]+$/, ""));
+              }}
+              className="mt-1.5 block w-full rounded-xl border bg-transparent px-3 py-2 text-sm"
+            />
+            <span className="mt-1 block text-[11px] font-normal" style={muted}>PDF, images, DICOM or DOCX · max 25 MB</span>
+          </label>
+          <label className="text-xs font-semibold">
+            Title
+            <input required maxLength={160} value={title} onChange={(event) => setTitle(event.target.value)} className="mt-1.5 w-full rounded-xl border bg-transparent px-3 py-2.5 text-sm" placeholder="Panoramic X-ray · Oct 2026" />
+          </label>
+          <label className="text-xs font-semibold">
+            Type
+            <select value={documentType} onChange={(event) => setDocumentType(event.target.value)} className="mt-1.5 w-full rounded-xl border bg-transparent px-3 py-2.5 text-sm">
+              <option value="xray">X-ray / Imaging</option>
+              <option value="consent">Consent</option>
+              <option value="referral">Referral</option>
+              <option value="prescription">Prescription</option>
+              <option value="treatment_plan">Treatment plan</option>
+              <option value="invoice">Invoice / Receipt</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-3 rounded-xl border px-3 py-3 text-sm">
+            <input type="checkbox" checked={patientVisible} onChange={(event) => setPatientVisible(event.target.checked)} />
+            <span><b className="block text-xs">Visible in Patient Portal</b><span className="text-[11px]" style={muted}>Only enable files the patient should be able to open.</span></span>
+          </label>
+          <div className="md:col-span-2 flex justify-end gap-2">
+            <button type="button" onClick={() => setShowUpload(false)} className="rounded-xl border px-3 py-2.5 text-sm">Cancel</button>
+            <button disabled={saving || !file} className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50" style={{ background: "var(--accent)" }}>
+              {saving ? "Uploading..." : "Upload securely"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {documents.length === 0 ? (
+        <EmptyState icon={FileText} title="No documents" description="X-rays, consent forms, referrals and other patient files will appear here." />
+      ) : (
+        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
+          {documents.map((document) => (
+            <div key={document.id} className="rounded-2xl border p-4" style={cardStyle}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="w-10 h-10 rounded-xl grid place-items-center" style={{ background: "var(--secondary)", color: "var(--primary)" }}><FileText size={18} /></div>
+                <StatusBadge tone={document.patient_visible ? "success" : "neutral"}>{document.patient_visible ? "Patient visible" : "Staff only"}</StatusBadge>
+              </div>
+              <div className="mt-4 font-semibold">{document.title}</div>
+              <div className="mt-1 text-xs capitalize" style={muted}>{document.document_type.replaceAll("_", " ")} · {formatSize(document.file_size)}</div>
+              <div className="mt-1 text-[11px]" style={muted}>{new Date(document.created_at).toLocaleString()}</div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button onClick={() => void openDocument(document)} className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold">
+                  <Eye size={13} />Open
+                </button>
+                {canManage && (
+                  <button onClick={() => void toggleVisibility(document)} className="rounded-xl border px-3 py-2 text-xs font-semibold">
+                    {document.patient_visible ? "Make staff only" : "Share to portal"}
+                  </button>
+                )}
+                {canDelete && (
+                  pendingDelete === document.id ? (
+                    <>
+                      <button disabled={saving} onClick={() => void removeDocument(document)} className="rounded-xl bg-red-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Confirm delete</button>
+                      <button onClick={() => setPendingDelete("")} className="rounded-xl border px-3 py-2 text-xs">Cancel</button>
+                    </>
+                  ) : (
+                    <button onClick={() => setPendingDelete(document.id)} className="rounded-xl p-2 text-red-600 hover:bg-red-50" aria-label={"Delete " + document.title}><Trash2 size={14} /></button>
+                  )
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FinanceTab({ patientId }: { patientId: string }) {
+  const { activeClinic } = useAuth();
+  const currency = activeClinic?.currency || "USD";
   const [invoices, setInvoices] = useState<Invoice[]>([]);
-  useEffect(() => { clinicRepository.listInvoices(patientId).then(setInvoices); }, [patientId]);
+  useEffect(() => { void clinicRepository.listInvoices(patientId).then(setInvoices); }, [patientId]);
   const total = invoices.reduce((sum, item) => sum + Number(item.total), 0);
   const paid = invoices.reduce((sum, item) => sum + Number(item.paid_total), 0);
   const balance = invoices.reduce((sum, item) => sum + Number(item.balance_due), 0);
-  return <div className="space-y-4"><div className="grid grid-cols-3 gap-3">{[["Invoiced",total],["Paid",paid],["Balance",balance]].map(([label,value]) => <div key={String(label)} className="rounded-2xl border p-4" style={cardStyle}><div className="text-xs" style={muted}>{label}</div><div className="text-xl font-bold mt-1">${Number(value).toLocaleString()}</div></div>)}</div>{invoices.length === 0 ? <EmptyState icon={FileText} title="No invoices" description="Invoices linked to this patient will appear here." /> : <div className="rounded-2xl border overflow-hidden" style={cardStyle}><div className="overflow-x-auto"><table className="w-full min-w-[650px] text-sm"><thead><tr className="text-left border-b" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}><th className="px-4 py-3">Invoice</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Total</th><th className="px-4 py-3">Paid</th><th className="px-4 py-3">Balance</th></tr></thead><tbody>{invoices.map((invoice) => <tr key={invoice.id} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}><td className="px-4 py-3 font-semibold">{invoice.invoice_no}</td><td className="px-4 py-3"><StatusBadge tone={invoice.status === "paid" ? "success" : invoice.status === "partially_paid" ? "warning" : "primary"}>{invoice.status.replaceAll("_", " ")}</StatusBadge></td><td className="px-4 py-3">${Number(invoice.total).toLocaleString()}</td><td className="px-4 py-3">${Number(invoice.paid_total).toLocaleString()}</td><td className="px-4 py-3 font-bold">${Number(invoice.balance_due).toLocaleString()}</td></tr>)}</tbody></table></div></div>}</div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid sm:grid-cols-3 gap-3">
+        {[["Invoiced", total], ["Paid", paid], ["Balance", balance]].map(([label, value]) => (
+          <div key={String(label)} className="rounded-2xl border p-4" style={cardStyle}>
+            <div className="text-xs" style={muted}>{label}</div>
+            <div className="text-xl font-bold mt-1">{formatMoney(Number(value), currency)}</div>
+          </div>
+        ))}
+      </div>
+      {invoices.length === 0 ? (
+        <EmptyState icon={FileText} title="No invoices" description="Invoices linked to this patient will appear here." />
+      ) : (
+        <div className="rounded-2xl border overflow-hidden" style={cardStyle}>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[700px] text-sm">
+              <thead><tr className="text-left border-b" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}><th className="px-4 py-3">Invoice</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Total</th><th className="px-4 py-3">Paid</th><th className="px-4 py-3">Balance</th><th className="px-4 py-3">Due</th></tr></thead>
+              <tbody>{invoices.map((invoice) => (
+                <tr key={invoice.id} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}>
+                  <td className="px-4 py-3 font-semibold">{invoice.invoice_no}</td>
+                  <td className="px-4 py-3"><StatusBadge tone={invoice.status === "paid" ? "success" : invoice.status === "partially_paid" ? "warning" : "primary"}>{invoice.status.replaceAll("_", " ")}</StatusBadge></td>
+                  <td className="px-4 py-3">{formatMoney(Number(invoice.total), currency)}</td>
+                  <td className="px-4 py-3">{formatMoney(Number(invoice.paid_total), currency)}</td>
+                  <td className="px-4 py-3 font-bold">{formatMoney(Number(invoice.balance_due), currency)}</td>
+                  <td className="px-4 py-3 text-xs" style={muted}>{invoice.due_at ? new Date(invoice.due_at).toLocaleDateString() : "—"}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function ClinicPatientWorkspace() {
   const { patientId } = useParams();
-  const { role } = useAuth();
+  const { role, hasFeature } = useAuth();
   const clinicalAccess = role === "admin" || role === "dentist";
+  const documentAccess = role === "admin" || role === "dentist" || role === "receptionist";
+  const financeAccess = hasFeature("accounting");
   const [patient, setPatient] = useState<Patient | null>(null);
   const [tab, setTab] = useState("overview");
   const [loading, setLoading] = useState(true);
@@ -237,7 +801,8 @@ export function ClinicPatientWorkspace() {
     ["appointments", "Appointments", CalendarDays],
     ...(clinicalAccess ? [["chart", "Dental Chart", Activity], ["clinical", "Clinical Notes", Stethoscope]] as const : []),
     ["plans", "Treatment Plans", ClipboardList],
-    ["finance", "Finance", FileText],
+    ...(documentAccess ? [["documents", "Documents", FileText]] as const : []),
+    ...(financeAccess ? [["finance", "Finance", FileText]] as const : []),
   ] as const;
 
   return <div className="space-y-4"><div className="rounded-3xl border p-5" style={cardStyle}><div className="flex flex-col md:flex-row md:items-center gap-4"><div className="w-14 h-14 rounded-2xl grid place-items-center text-white text-xl font-bold" style={{ background: "var(--primary)" }}>{patient.first_name[0]}{patient.last_name[0]}</div><div className="flex-1"><div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-bold" style={{ fontFamily: "'Cormorant Garamond', serif", color: "var(--primary)" }}>{patient.first_name} {patient.last_name}</h2><StatusBadge tone="success">{patient.patient_no}</StatusBadge>{patient.allergies && patient.allergies.toLowerCase() !== "none known" && <StatusBadge tone="danger">Allergy: {patient.allergies}</StatusBadge>}</div><div className="text-xs mt-1" style={muted}>{patient.phone || "No phone"} · {patient.email || "No email"} · DOB {patient.date_of_birth || "not recorded"}</div></div><Link to="/admin/patients" className="text-xs font-semibold" style={{ color: "var(--accent)" }}>Back to Patients</Link></div></div>
@@ -247,7 +812,8 @@ export function ClinicPatientWorkspace() {
   {tab === "chart" && clinicalAccess && <DentalChart patientId={patientId} />}
   {tab === "plans" && <TreatmentPlansTab patientId={patientId} />}
   {tab === "clinical" && clinicalAccess && <ClinicalNotesTab patientId={patientId} />}
-  {tab === "finance" && <FinanceTab patientId={patientId} />}
+  {tab === "documents" && documentAccess && <DocumentsTab patientId={patientId} />}
+  {tab === "finance" && financeAccess && <FinanceTab patientId={patientId} />}
   </div>;
 }
 
@@ -299,9 +865,11 @@ export function ClinicAppointments() {
 }
 
 export function ClinicTreatmentPlans() {
+  const { activeClinic } = useAuth();
+  const currency = activeClinic?.currency || "USD";
   const [plans, setPlans] = useState<TreatmentPlan[]>([]);
   useEffect(() => { clinicRepository.listTreatmentPlans().then(setPlans); }, []);
-  return <div className="space-y-5"><div><h2 className="text-xl font-bold" style={{ color: "var(--primary)", fontFamily: "'Cormorant Garamond', serif" }}>Treatment Plans</h2><p className="text-xs" style={muted}>Track proposed care from draft through approval and completion.</p></div><div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">{plans.map((plan) => <div key={plan.id} className="rounded-2xl border p-4" style={cardStyle}><div className="flex items-start justify-between gap-3"><div><div className="font-semibold">{plan.title}</div><div className="text-xs mt-1" style={muted}>{plan.patient ? `${plan.patient.first_name} ${plan.patient.last_name} · ${plan.patient.patient_no}` : "Patient record"}</div></div><StatusBadge tone={plan.status === "completed" ? "success" : plan.status === "approved" || plan.status === "in_progress" ? "primary" : "warning"}>{plan.status.replaceAll("_", " ")}</StatusBadge></div><div className="flex justify-between mt-5 pt-3 border-t" style={{ borderColor: "var(--border)" }}><span className="text-xs" style={muted}>Estimated</span><span className="font-bold">${Number(plan.estimated_total).toLocaleString()}</span></div></div>)}</div></div>;
+  return <div className="space-y-5"><div><h2 className="text-xl font-bold" style={{ color: "var(--primary)", fontFamily: "'Cormorant Garamond', serif" }}>Treatment Plans</h2><p className="text-xs" style={muted}>Track proposed care from draft through approval and completion.</p></div><div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">{plans.map((plan) => <div key={plan.id} className="rounded-2xl border p-4" style={cardStyle}><div className="flex items-start justify-between gap-3"><div><div className="font-semibold">{plan.title}</div><div className="text-xs mt-1" style={muted}>{plan.patient ? `${plan.patient.first_name} ${plan.patient.last_name} · ${plan.patient.patient_no}` : "Patient record"}</div></div><StatusBadge tone={plan.status === "completed" ? "success" : plan.status === "approved" || plan.status === "in_progress" ? "primary" : "warning"}>{plan.status.replaceAll("_", " ")}</StatusBadge></div><div className="flex justify-between mt-5 pt-3 border-t" style={{ borderColor: "var(--border)" }}><span className="text-xs" style={muted}>Estimated</span><span className="font-bold">{formatMoney(Number(plan.estimated_total), currency)}</span></div></div>)}</div></div>;
 }
 
 export function ClinicInventory() {
@@ -344,16 +912,142 @@ export function ClinicInventory() {
 
 
 export function ClinicBookingRequests() {
+  const navigate = useNavigate();
   const [items, setItems] = useState<BookingRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const load = async () => { setLoading(true); setItems(await clinicRepository.listBookingRequests()); setLoading(false); };
+  const [convertingId, setConvertingId] = useState("");
+  const [error, setError] = useState("");
+
+  const load = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      setItems(await clinicRepository.listBookingRequests());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to load booking requests.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => { void load(); }, []);
-  const setStatus = async (id: string, status: BookingRequest["status"]) => { await clinicRepository.updateBookingRequestStatus(id, status); await load(); };
+
+  const setStatus = async (id: string, status: BookingRequest["status"]) => {
+    setError("");
+    try {
+      await clinicRepository.updateBookingRequestStatus(id, status);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update booking request.");
+    }
+  };
+
+  const convert = async (item: BookingRequest) => {
+    setConvertingId(item.id);
+    setError("");
+    try {
+      const result = await clinicRepository.convertBookingRequest(item.id);
+      await load();
+      navigate("/admin/patients/" + result.patient_id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to create the appointment.");
+    } finally {
+      setConvertingId("");
+    }
+  };
+
   if (loading) return <div className="py-20 text-center" style={muted}>Loading booking requests...</div>;
-  return <div className="space-y-5"><div><h2 className="text-xl font-bold" style={{ color: "var(--primary)", fontFamily: "'Cormorant Garamond', serif" }}>Booking Requests</h2><p className="text-xs" style={muted}>Public booking requests are stored before WhatsApp opens, so reception can follow up reliably.</p></div>{items.length === 0 ? <EmptyState icon={CalendarDays} title="No booking requests" description="New public booking requests will appear here." /> : <div className="rounded-2xl border overflow-hidden" style={cardStyle}><div className="overflow-x-auto"><table className="w-full min-w-[980px] text-sm"><thead><tr className="text-left border-b" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}><th className="px-4 py-3">Patient</th><th className="px-4 py-3">Contact</th><th className="px-4 py-3">Requested Treatment</th><th className="px-4 py-3">Doctor</th><th className="px-4 py-3">Preferred Time</th><th className="px-4 py-3">Status</th></tr></thead><tbody>{items.map((item) => <tr key={item.id} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}><td className="px-4 py-3"><div className="font-semibold">{item.full_name}</div><div className="text-xs" style={muted}>{new Date(item.created_at).toLocaleString()}</div></td><td className="px-4 py-3"><div>{item.phone}</div><div className="text-xs" style={muted}>{item.email || "No email"}</div></td><td className="px-4 py-3">{item.requested_treatment || "General consultation"}</td><td className="px-4 py-3">{item.requested_doctor || "No preference"}</td><td className="px-4 py-3">{item.preferred_date || "Flexible"} {item.preferred_time || ""}</td><td className="px-4 py-3"><select value={item.status} onChange={(e) => void setStatus(item.id, e.target.value as BookingRequest["status"])} className="px-2 py-1.5 rounded-lg border bg-transparent text-xs"><option value="new">New</option><option value="contacted">Contacted</option><option value="converted">Converted</option><option value="closed">Closed</option></select></td></tr>)}</tbody></table></div></div>}</div>;
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-xl font-bold" style={{ color: "var(--primary)", fontFamily: "'Cormorant Garamond', serif" }}>Booking Requests</h2>
+        <p className="text-xs" style={muted}>Review public requests, follow up with the patient, then convert an accepted request into a patient record and scheduled appointment atomically.</p>
+      </div>
+
+      {error && <div role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+
+      {items.length === 0 ? (
+        <EmptyState icon={CalendarDays} title="No booking requests" description="New public booking requests will appear here." />
+      ) : (
+        <div className="rounded-2xl border overflow-hidden" style={cardStyle}>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1120px] text-sm">
+              <thead>
+                <tr className="text-left border-b" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>
+                  <th className="px-4 py-3">Patient</th>
+                  <th className="px-4 py-3">Contact</th>
+                  <th className="px-4 py-3">Treatment</th>
+                  <th className="px-4 py-3">Doctor</th>
+                  <th className="px-4 py-3">Preferred slot</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr key={item.id} className="border-b last:border-0 align-top" style={{ borderColor: "var(--border)" }}>
+                    <td className="px-4 py-3">
+                      <div className="font-semibold">{item.full_name}</div>
+                      <div className="text-xs mt-1" style={muted}>{new Date(item.created_at).toLocaleString()}</div>
+                      {item.notes && <div className="text-xs mt-2 max-w-xs" style={muted}>{item.notes}</div>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <a href={"tel:" + item.phone} className="font-medium hover:underline">{item.phone}</a>
+                      <div className="text-xs mt-1" style={muted}>{item.email || "No email"}</div>
+                    </td>
+                    <td className="px-4 py-3">{item.requested_treatment || "General consultation"}</td>
+                    <td className="px-4 py-3">{item.requested_doctor || "No preference"}</td>
+                    <td className="px-4 py-3">
+                      <div className="font-medium">{item.preferred_date || "Flexible"}</div>
+                      <div className="text-xs mt-1" style={muted}>{item.preferred_time || "No time selected"}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {item.status === "converted" ? (
+                        <StatusBadge tone="success">Converted</StatusBadge>
+                      ) : (
+                        <select
+                          value={item.status}
+                          onChange={(event) => void setStatus(item.id, event.target.value as BookingRequest["status"])}
+                          className="px-2 py-1.5 rounded-lg border bg-transparent text-xs"
+                        >
+                          <option value="new">New</option>
+                          <option value="contacted">Contacted</option>
+                          <option value="closed">Closed</option>
+                        </select>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {item.status === "converted" ? (
+                        <span className="text-xs" style={muted}>Patient + appointment created</span>
+                      ) : item.status === "closed" ? (
+                        <span className="text-xs" style={muted}>Closed without appointment</span>
+                      ) : (
+                        <button
+                          disabled={convertingId === item.id || !item.preferred_date || !item.preferred_time}
+                          onClick={() => void convert(item)}
+                          className="rounded-xl px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                          style={{ background: "var(--primary)" }}
+                          title={!item.preferred_date || !item.preferred_time ? "A preferred date and time are required before conversion." : undefined}
+                        >
+                          {convertingId === item.id ? "Creating..." : "Create appointment"}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function ClinicDashboard() {
+  const { activeClinic } = useAuth();
+  const currency = activeClinic?.currency || "USD";
   const [summary, setSummary] = useState<Awaited<ReturnType<typeof clinicRepository.getDashboardSummary>> | null>(null);
   const [error, setError] = useState("");
   useEffect(() => { clinicRepository.getDashboardSummary().then(setSummary).catch((e) => setError(e instanceof Error ? e.message : "Unable to load dashboard.")); }, []);
@@ -361,8 +1055,8 @@ export function ClinicDashboard() {
   const kpis = [
     ["Patients", summary.totalPatients, UserRound],
     ["Today's appointments", summary.todayAppointments, CalendarDays],
-    ["Monthly revenue", `$${summary.monthlyRevenue.toLocaleString()}`, FileText],
-    ["Outstanding", `$${summary.outstandingBalance.toLocaleString()}`, AlertTriangle],
+    ["Monthly revenue", formatMoney(summary.monthlyRevenue, currency), FileText],
+    ["Outstanding", formatMoney(summary.outstandingBalance, currency), AlertTriangle],
     ["Active booking requests", summary.activeLeads, ClipboardList],
     ["Low stock", summary.lowStock, Package],
   ] as const;
@@ -389,7 +1083,8 @@ export function ClinicDoctors() {
 }
 
 export function ClinicServices() {
-  const { role } = useAuth();
+  const { role, activeClinic } = useAuth();
+  const currency = activeClinic?.currency || "USD";
   const [items, setItems] = useState<TreatmentCatalogItem[]>([]);
   const [show, setShow] = useState(false);
   const [error, setError] = useState("");
@@ -399,7 +1094,7 @@ export function ClinicServices() {
   const submit = async (e: FormEvent) => { e.preventDefault(); setError(""); try { await clinicRepository.createTreatment({ code: form.code, name_en: form.name_en, name_ar: form.name_ar, duration_minutes: Number(form.duration_minutes), default_price: Number(form.default_price) }); setForm({ code: "", name_en: "", name_ar: "", duration_minutes: "30", default_price: "0" }); setShow(false); await load(); } catch (err) { setError(err instanceof Error ? err.message : "Unable to add treatment."); } };
   return <div className="space-y-5"><div className="flex items-end justify-between"><div><h2 className="text-xl font-bold" style={{ color: "var(--primary)", fontFamily: "'Cormorant Garamond', serif" }}>Treatments & Services</h2><p className="text-xs" style={muted}>Live treatment catalog used by appointments and billing.</p></div>{role === "admin" && <button onClick={() => setShow(!show)} className="px-3 py-2 rounded-xl text-sm font-semibold" style={{ background: "var(--primary)", color: "white" }}><Plus size={13} className="inline mr-1" />Add Treatment</button>}</div>
   {error && <div className="p-3 rounded-xl bg-red-50 text-red-700 text-sm">{error}</div>}{show && <form onSubmit={submit} className="rounded-2xl border p-4 grid md:grid-cols-5 gap-3" style={cardStyle}>{[["Code","code","text"],["English name","name_en","text"],["Arabic name","name_ar","text"],["Minutes","duration_minutes","number"],["Price","default_price","number"]].map(([label,key,type]) => <label key={key} className="text-xs font-semibold">{label}<input required={["code","name_en"].includes(key)} type={type} min={type === "number" ? "0" : undefined} value={form[key as keyof typeof form]} onChange={(e) => setForm({...form,[key]:e.target.value})} className="mt-1.5 w-full px-3 py-2.5 rounded-xl border bg-transparent text-sm" /></label>)}<div className="md:col-span-5 flex justify-end"><button className="px-4 py-2.5 rounded-xl text-sm font-semibold" style={{ background: "var(--accent)", color: "white" }}>Save Treatment</button></div></form>}
-  <div className="rounded-2xl border overflow-hidden" style={cardStyle}><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-sm"><thead><tr className="border-b text-left" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}><th className="px-4 py-3">Code</th><th className="px-4 py-3">Treatment</th><th className="px-4 py-3">Arabic</th><th className="px-4 py-3">Duration</th><th className="px-4 py-3">Default price</th></tr></thead><tbody>{items.map((item) => <tr key={item.id} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}><td className="px-4 py-3 font-semibold">{item.code}</td><td className="px-4 py-3">{item.name_en}</td><td className="px-4 py-3" dir="rtl">{item.name_ar || "—"}</td><td className="px-4 py-3">{item.duration_minutes} min</td><td className="px-4 py-3 font-bold">${Number(item.default_price).toLocaleString()}</td></tr>)}</tbody></table></div></div></div>;
+  <div className="rounded-2xl border overflow-hidden" style={cardStyle}><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-sm"><thead><tr className="border-b text-left" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}><th className="px-4 py-3">Code</th><th className="px-4 py-3">Treatment</th><th className="px-4 py-3">Arabic</th><th className="px-4 py-3">Duration</th><th className="px-4 py-3">Default price</th></tr></thead><tbody>{items.map((item) => <tr key={item.id} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}><td className="px-4 py-3 font-semibold">{item.code}</td><td className="px-4 py-3">{item.name_en}</td><td className="px-4 py-3" dir="rtl">{item.name_ar || "—"}</td><td className="px-4 py-3">{item.duration_minutes} min</td><td className="px-4 py-3 font-bold">{formatMoney(Number(item.default_price), currency)}</td></tr>)}</tbody></table></div></div></div>;
 }
 
 export function ClinicUsers() {
@@ -430,7 +1125,7 @@ export function ClinicUsers() {
     license_number: "",
   });
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!activeClinicId) return;
     setError("");
     try {
@@ -438,9 +1133,9 @@ export function ClinicUsers() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load users.");
     }
-  };
+  }, [activeClinicId]);
 
-  useEffect(() => { void load(); }, [activeClinicId]);
+  useEffect(() => { void load(); }, [load]);
 
   if (!activeClinicId) return <EmptyState icon={UserRound} title="No clinic selected" description="Select a clinic before managing staff." />;
   if (activeClinicRole !== "clinic_owner") return <EmptyState icon={UserRound} title="Clinic Owner access required" description="Only the Clinic Owner can create or manage staff accounts." />;

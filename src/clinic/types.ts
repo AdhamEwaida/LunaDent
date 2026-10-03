@@ -76,6 +76,7 @@ export type TreatmentPlan = {
   estimated_total: number;
   discount_total: number;
   notes?: string | null;
+  approved_at?: string | null;
   created_at: string;
   patient?: Pick<Patient, "id" | "patient_no" | "first_name" | "last_name"> | null;
 };
@@ -155,6 +156,8 @@ export type BookingRequest = {
   full_name: string;
   email?: string | null;
   phone: string;
+  treatment_id?: string | null;
+  doctor_id?: string | null;
   requested_treatment?: string | null;
   requested_doctor?: string | null;
   preferred_date?: string | null;

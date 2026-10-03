@@ -56,17 +56,30 @@ Deno.serve(async (req: Request) => {
 
       const [{ data: theme, error: themeError }, { data: plan, error: planError }] = await Promise.all([
         admin.from("themes").select("key,default_tokens").eq("key", themeKey).eq("active", true).single(),
-        admin.from("plans").select("id,code").eq("code", planCode).eq("active", true).single(),
+        admin.from("plans").select("id,code,features").eq("code", planCode).eq("active", true).single(),
       ]);
       if (themeError || !theme) return Response.json({ error: "Invalid theme." }, { status: 400, headers: cors });
       if (planError || !plan) return Response.json({ error: "Invalid plan." }, { status: 400, headers: cors });
+      if (!plan.features?.all_themes && theme.key !== "modern") {
+        return Response.json({ error: "The selected plan includes the Modern website theme only." }, { status: 400, headers: cors });
+      }
 
       const { data: existingClinic } = await admin.from("clinics").select("id").eq("slug", slug).maybeSingle();
       if (existingClinic) return Response.json({ error: "Clinic slug is already in use." }, { status: 409, headers: cors });
 
-      const { data: listed, error: listError } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      if (listError) throw listError;
-      let owner = listed.users.find((u) => u.email?.toLowerCase() === ownerEmail);
+      const { data: ownerProfile, error: ownerProfileLookupError } = await admin
+        .from("profiles")
+        .select("id")
+        .eq("email", ownerEmail)
+        .maybeSingle();
+      if (ownerProfileLookupError) throw ownerProfileLookupError;
+
+      let owner = null;
+      if (ownerProfile?.id) {
+        const { data: ownerAuth, error: ownerAuthError } = await admin.auth.admin.getUserById(ownerProfile.id);
+        if (ownerAuthError) throw ownerAuthError;
+        owner = ownerAuth.user ?? null;
+      }
 
       if (!owner) {
         if (temporaryPassword.length < 8) {
@@ -169,6 +182,17 @@ Deno.serve(async (req: Request) => {
       ]);
       if (roomError) throw roomError;
 
+      const defaultHours = Array.from({ length: 7 }, (_, weekday) => ({
+        clinic_id: clinic.id,
+        weekday,
+        enabled: weekday >= 1 && weekday <= 6,
+        open_time: weekday === 6 ? "10:00" : weekday >= 1 && weekday <= 5 ? "09:00" : null,
+        close_time: weekday === 6 ? "14:00" : weekday >= 1 && weekday <= 5 ? "17:00" : null,
+        slot_minutes: 30,
+      }));
+      const { error: hoursError } = await admin.from("clinic_business_hours").insert(defaultHours);
+      if (hoursError) throw hoursError;
+
       return Response.json({ clinic, owner_user_id: owner.id, theme_key: theme.key, plan_code: plan.code }, { headers: cors });
     }
 
@@ -180,20 +204,101 @@ Deno.serve(async (req: Request) => {
       }
       const { error } = await admin.from("clinics").update({ status }).eq("id", clinicId);
       if (error) throw error;
+      await admin.from("audit_logs").insert({
+        clinic_id: clinicId,
+        actor_user_id: identity.user.id,
+        action: "update",
+        entity_type: "clinic",
+        entity_id: clinicId,
+        metadata: { changed_fields: ["status"] },
+      });
       return Response.json({ ok: true }, { headers: cors });
+    }
+
+    if (action === "update_subscription_status") {
+      const clinicId = String(body?.clinic_id ?? "");
+      const status = String(body?.status ?? "");
+      if (!clinicId || !["trialing","active","past_due","canceled","suspended"].includes(status)) {
+        return Response.json({ error: "Invalid clinic or subscription status." }, { status: 400, headers: cors });
+      }
+
+      const patch: Record<string, unknown> = { status };
+      if (status === "trialing") {
+        const days = Math.min(60, Math.max(1, Number(body?.trial_days ?? 14)));
+        patch.trial_ends_at = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+      } else {
+        patch.trial_ends_at = null;
+      }
+      if (status === "active" && body?.current_period_end) {
+        patch.current_period_end = String(body.current_period_end);
+      }
+
+      const { data: subscription, error } = await admin
+        .from("subscriptions")
+        .update(patch)
+        .eq("clinic_id", clinicId)
+        .select("id,status,trial_ends_at,current_period_end")
+        .single();
+      if (error) throw error;
+      await admin.from("audit_logs").insert({
+        clinic_id: clinicId,
+        actor_user_id: identity.user.id,
+        action: "update",
+        entity_type: "subscription",
+        entity_id: subscription.id,
+        metadata: { changed_fields: ["status","trial_ends_at","current_period_end"] },
+      });
+      return Response.json({ ok: true, subscription }, { headers: cors });
     }
 
     if (action === "set_plan") {
       const clinicId = String(body?.clinic_id ?? "");
       const planCode = String(body?.plan_code ?? "");
-      const { data: plan, error: planError } = await admin.from("plans").select("id").eq("code", planCode).single();
+      const { data: plan, error: planError } = await admin
+        .from("plans")
+        .select("id,code,features")
+        .eq("code", planCode)
+        .eq("active", true)
+        .single();
       if (planError || !plan) return Response.json({ error: "Invalid plan." }, { status: 400, headers: cors });
+
       const { error } = await admin.from("subscriptions").update({
         plan_id: plan.id,
         status: "active",
       }).eq("clinic_id", clinicId);
       if (error) throw error;
-      return Response.json({ ok: true }, { headers: cors });
+
+      if (!plan.features?.all_themes) {
+        const { data: modernTheme, error: themeLookupError } = await admin
+          .from("themes")
+          .select("default_tokens")
+          .eq("key", "modern")
+          .single();
+        if (themeLookupError) throw themeLookupError;
+        const { error: siteThemeError } = await admin
+          .from("clinic_site_settings")
+          .update({ theme_key: "modern", tokens: modernTheme.default_tokens })
+          .eq("clinic_id", clinicId);
+        if (siteThemeError) throw siteThemeError;
+      }
+
+      if (!plan.features?.custom_domain) {
+        const { error: domainError } = await admin
+          .from("clinic_site_settings")
+          .update({ custom_domain: null, domain_verified: false })
+          .eq("clinic_id", clinicId);
+        if (domainError) throw domainError;
+      }
+
+      await admin.from("audit_logs").insert({
+        clinic_id: clinicId,
+        actor_user_id: identity.user.id,
+        action: "update",
+        entity_type: "subscription",
+        entity_id: clinicId,
+        metadata: { changed_fields: ["plan_id"] },
+      });
+      return Response.json({ ok: true, plan_code: plan.code }, { headers: cors });
     }
 
     return Response.json({ error: "Unsupported action." }, { status: 400, headers: cors });

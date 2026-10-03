@@ -1,10 +1,10 @@
-import { ChangeEvent, useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Check, Eye, ImagePlus, Palette, Save, SlidersHorizontal, Type, Upload } from "lucide-react";
+import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowDown, ArrowUp, CalendarClock, Check, Eye, ImagePlus, Palette, Save, SlidersHorizontal, Type, Upload } from "lucide-react";
 import ClinicThemeRenderer from "@/components/ClinicThemeRenderer";
 import { useAuth } from "@/auth/AuthContext";
 import { saasRepository } from "@/saas/repository";
 import { supabase } from "@/lib/supabase";
-import type { ClinicSiteSettings, PublicClinicSite, SiteSection, SiteTokens, ThemeDefinition } from "@/saas/types";
+import type { BookingSettings, ClinicBusinessHour, ClinicSiteSettings, PublicClinicSite, SiteTokens, ThemeDefinition } from "@/saas/types";
 
 const colorFields: Array<[keyof NonNullable<SiteTokens["colors"]>, string]> = [
   ["primary","Primary"],
@@ -14,6 +14,50 @@ const colorFields: Array<[keyof NonNullable<SiteTokens["colors"]>, string]> = [
   ["surface","Surface"],
   ["text","Text"],
   ["muted","Muted text"],
+];
+
+const BOOKING_DEFAULTS: Required<BookingSettings> = {
+  days: [1, 2, 3, 4, 5],
+  start: "09:00",
+  end: "17:00",
+  slotMinutes: 30,
+  leadTimeHours: 2,
+  horizonDays: 90,
+};
+
+const DAY_LABELS = [
+  [0, "Sun"], [1, "Mon"], [2, "Tue"], [3, "Wed"], [4, "Thu"], [5, "Fri"], [6, "Sat"],
+] as const;
+
+type TypographyScaleKey = "headingScale" | "bodyScale";
+type NumericLayoutKey = "maxWidth" | "sectionSpacing" | "heroMinHeight" | "navHeight" | "buttonRadius" | "cardRadius";
+type EditableTextSection = "services" | "doctors" | "booking" | "contact";
+
+const TYPOGRAPHY_SCALE_CONTROLS: Array<{
+  key: TypographyScaleKey;
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+}> = [
+  { key: "headingScale", label: "Heading size", min: 0.8, max: 1.4, step: 0.05 },
+  { key: "bodyScale", label: "Body size", min: 0.85, max: 1.25, step: 0.05 },
+];
+
+const LAYOUT_CONTROLS: Array<{
+  key: NumericLayoutKey;
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  unit: string;
+}> = [
+  { key: "maxWidth", label: "Content width", min: 900, max: 1500, step: 20, unit: "px" },
+  { key: "sectionSpacing", label: "Section spacing", min: 40, max: 160, step: 4, unit: "px" },
+  { key: "heroMinHeight", label: "Hero height", min: 420, max: 900, step: 20, unit: "px" },
+  { key: "navHeight", label: "Navigation height", min: 56, max: 110, step: 2, unit: "px" },
+  { key: "buttonRadius", label: "Button radius", min: 0, max: 999, step: 1, unit: "px" },
+  { key: "cardRadius", label: "Card radius", min: 0, max: 50, step: 1, unit: "px" },
 ];
 
 const sectionNames: Record<string,string> = {
@@ -34,11 +78,12 @@ function deepMergeTokens(base: SiteTokens, custom: SiteTokens): SiteTokens {
 }
 
 export default function SiteBuilder() {
-  const { activeClinicId, activeClinic, activeClinicRole } = useAuth();
+  const { activeClinicId, activeClinic, activeClinicRole, entitlements, hasFeature } = useAuth();
   const [themes, setThemes] = useState<ThemeDefinition[]>([]);
   const [settings, setSettings] = useState<ClinicSiteSettings | null>(null);
-  const [doctors, setDoctors] = useState<any[]>([]);
-  const [treatments, setTreatments] = useState<any[]>([]);
+  const [doctors, setDoctors] = useState<PublicClinicSite["doctors"]>([]);
+  const [treatments, setTreatments] = useState<PublicClinicSite["treatments"]>([]);
+  const [businessHours, setBusinessHours] = useState<ClinicBusinessHour[]>([]);
   const [clinicDraft, setClinicDraft] = useState({
     name: "",
     phone: "",
@@ -47,23 +92,27 @@ export default function SiteBuilder() {
     address: "",
     city: "",
     country: "",
+    timezone: "UTC",
+    currency: "USD",
   });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!activeClinicId || !activeClinic || !supabase) return;
     setError("");
     try {
-      const [themeRows, siteSettings, doctorsRes, treatmentsRes] = await Promise.all([
+      const [themeRows, siteSettings, hoursRows, doctorsRes, treatmentsRes] = await Promise.all([
         saasRepository.listThemes(),
         saasRepository.getSiteSettings(activeClinicId),
+        saasRepository.listBusinessHours(activeClinicId),
         supabase.from("doctors").select("id,display_name,specialty,bio_en").eq("clinic_id",activeClinicId).eq("active",true).order("display_name"),
         supabase.from("treatments").select("id,code,name_en,name_ar,description_en,duration_minutes,default_price").eq("clinic_id",activeClinicId).eq("active",true).order("name_en"),
       ]);
       setThemes(themeRows);
       setSettings(siteSettings);
+      setBusinessHours(hoursRows);
       setDoctors(doctorsRes.data ?? []);
       setTreatments(treatmentsRes.data ?? []);
       setClinicDraft({
@@ -74,15 +123,21 @@ export default function SiteBuilder() {
         address: activeClinic.address || "",
         city: activeClinic.city || "",
         country: activeClinic.country || "",
+        timezone: activeClinic.timezone || "UTC",
+        currency: activeClinic.currency || "USD",
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load website settings.");
     }
-  };
+  }, [activeClinicId, activeClinic]);
 
-  useEffect(() => { void load(); }, [activeClinicId, activeClinic?.id]);
+  useEffect(() => { void load(); }, [load]);
 
   const selectedTheme = themes.find(theme=>theme.key===settings?.theme_key) ?? null;
+  const bookingSettings: Required<BookingSettings> = {
+    ...BOOKING_DEFAULTS,
+    ...(settings?.content.bookingSettings || {}),
+  };
   const effectiveTokens = useMemo(() => deepMergeTokens(selectedTheme?.default_tokens || {}, settings?.tokens || {}), [selectedTheme, settings?.tokens]);
 
   const previewSite = useMemo<PublicClinicSite | null>(() => {
@@ -105,7 +160,7 @@ export default function SiteBuilder() {
       ...current,
       tokens: {
         ...(current.tokens || {}),
-        [group]: { ...((current.tokens as any)?.[group] || {}), [key]: value },
+        [group]: { ...(current.tokens[group] || {}), [key]: value },
       },
     } : current);
   };
@@ -128,14 +183,21 @@ export default function SiteBuilder() {
     } : current);
   };
 
-  const updateSectionContent = (section: string, key: string, value: string) => {
-    setSettings(current => current ? {
-      ...current,
-      content: {
-        ...(current.content || {}),
-        [section]: { ...(current.content?.[section] || {}), [key]: value },
-      },
-    } : current);
+  const updateSectionContent = (section: EditableTextSection, key: string, value: string) => {
+    setSettings((current) => {
+      if (!current) return current;
+      const sectionValue = current.content[section];
+      const currentSection = sectionValue && typeof sectionValue === "object" && !Array.isArray(sectionValue)
+        ? sectionValue as Record<string, unknown>
+        : {};
+      return {
+        ...current,
+        content: {
+          ...current.content,
+          [section]: { ...currentSection, [key]: value },
+        },
+      };
+    });
   };
 
   const updateJourneyStep = (index: number, key: "title" | "text", value: string) => {
@@ -146,7 +208,7 @@ export default function SiteBuilder() {
         { step: "02", title: "Visit the clinic", text: "Receive care from your dental team." },
         { step: "03", title: "Stay connected", text: "Use the secure patient portal for follow-up." },
       ];
-      const steps = [...(current.content?.journey?.steps || defaults)].map((item: any) => ({ ...item }));
+      const steps = [...(current.content?.journey?.steps || defaults)].map((item) => ({ ...item }));
       steps[index] = { ...steps[index], [key]: value };
       return {
         ...current,
@@ -156,6 +218,26 @@ export default function SiteBuilder() {
         },
       };
     });
+  };
+
+  const updateBookingSetting = (key: keyof typeof BOOKING_DEFAULTS, value: string | number | number[]) => {
+    setSettings(current => current ? {
+      ...current,
+      content: {
+        ...(current.content || {}),
+        bookingSettings: {
+          ...BOOKING_DEFAULTS,
+          ...(current.content?.bookingSettings || {}),
+          [key]: value,
+        },
+      },
+    } : current);
+  };
+
+  const updateBusinessHour = (weekday: number, patch: Partial<ClinicBusinessHour>) => {
+    setBusinessHours((current) =>
+      current.map((row) => row.weekday === weekday ? { ...row, ...patch } : row)
+    );
   };
 
   const toggleSection = (key: string) => {
@@ -198,6 +280,22 @@ export default function SiteBuilder() {
   };
 
   const save = async () => {
+    const toMinutes = (value: string) => {
+      const [hour, minute] = value.slice(0,5).split(":").map(Number);
+      return hour * 60 + minute;
+    };
+    const enabledHours = businessHours.filter((row) => row.enabled);
+    if (enabledHours.length === 0) {
+      setError("Enable at least one booking day.");
+      return;
+    }
+    for (const row of enabledHours) {
+      if (!row.open_time || !row.close_time || toMinutes(row.open_time) >= toMinutes(row.close_time)) {
+        setError("Every enabled booking day needs a valid opening and closing time.");
+        return;
+      }
+    }
+
     setSaving(true);
     setMessage("");
     setError("");
@@ -205,8 +303,9 @@ export default function SiteBuilder() {
       await Promise.all([
         saasRepository.updateSiteSettings(activeClinicId, settings),
         saasRepository.updateClinic(activeClinicId, clinicDraft),
+        saasRepository.saveBusinessHours(activeClinicId, businessHours),
       ]);
-      setMessage("Website settings saved.");
+      setMessage("Website, branding, and booking hours saved.");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to save website.");
@@ -240,9 +339,20 @@ export default function SiteBuilder() {
           <section className="rounded-2xl border bg-white p-5">
             <div className="flex items-center gap-2 font-bold"><Palette size={17}/>Theme</div>
             <div className="grid grid-cols-3 gap-2 mt-4">
-              {themes.map(theme=><button key={theme.key} onClick={()=>chooseTheme(theme)} className={`rounded-xl border p-3 text-left ${settings.theme_key===theme.key?"ring-2 ring-violet-400":""}`}>
-                <div className="font-semibold text-sm">{theme.name}</div><div className="text-[10px] mt-1 text-slate-500">{theme.premium?"Premium":"Included"}</div>
-              </button>)}
+              {themes.map((theme) => {
+                const locked = theme.key !== "modern" && !hasFeature("all_themes");
+                return <button
+                  type="button"
+                  key={theme.key}
+                  disabled={locked}
+                  onClick={()=>chooseTheme(theme)}
+                  className={`rounded-xl border p-3 text-left transition ${settings.theme_key===theme.key?"ring-2 ring-violet-400":""} ${locked?"cursor-not-allowed bg-slate-50 opacity-60":"hover:border-violet-300"}`}
+                  title={locked ? `${entitlements?.plan?.name || "Current"} plan includes the Modern theme only` : undefined}
+                >
+                  <div className="font-semibold text-sm">{theme.name}</div>
+                  <div className="text-[10px] mt-1 text-slate-500">{locked ? "Upgrade to unlock" : theme.premium ? "Premium" : "Included"}</div>
+                </button>;
+              })}
             </div>
           </section>
 
@@ -272,22 +382,15 @@ export default function SiteBuilder() {
                 </select>
               </label>
             </div>
-            {[["headingScale","Heading size",0.8,1.4,0.05],["bodyScale","Body size",0.85,1.25,0.05]].map(([key,label,min,max,step])=><label key={String(key)} className="block text-xs font-semibold mt-4">{label} · {Number((effectiveTokens.typography as any)?.[key] || 1).toFixed(2)}x
-              <input type="range" min={Number(min)} max={Number(max)} step={Number(step)} value={Number((effectiveTokens.typography as any)?.[key] || 1)} onChange={e=>updateTokens("typography",String(key),Number(e.target.value))} className="w-full mt-2" />
+            {TYPOGRAPHY_SCALE_CONTROLS.map(({key,label,min,max,step})=><label key={key} className="block text-xs font-semibold mt-4">{label} · {Number(effectiveTokens.typography?.[key] || 1).toFixed(2)}x
+              <input type="range" min={min} max={max} step={step} value={Number(effectiveTokens.typography?.[key] || 1)} onChange={e=>updateTokens("typography",key,Number(e.target.value))} className="w-full mt-2" />
             </label>)}
           </section>
 
           <section className="rounded-2xl border bg-white p-5">
             <div className="flex items-center gap-2 font-bold"><SlidersHorizontal size={17}/>Sizes & spacing</div>
-            {[
-              ["maxWidth","Content width",900,1500,20,"px"],
-              ["sectionSpacing","Section spacing",40,160,4,"px"],
-              ["heroMinHeight","Hero height",420,900,20,"px"],
-              ["navHeight","Navigation height",56,110,2,"px"],
-              ["buttonRadius","Button radius",0,999,1,"px"],
-              ["cardRadius","Card radius",0,50,1,"px"],
-            ].map(([key,label,min,max,step,unit])=><label key={String(key)} className="block text-xs font-semibold mt-4 first:mt-3">{label} · {Number((effectiveTokens.layout as any)?.[key] || 0)}{unit}
-              <input type="range" min={Number(min)} max={Number(max)} step={Number(step)} value={Number((effectiveTokens.layout as any)?.[key] || 0)} onChange={e=>updateTokens("layout",String(key),Number(e.target.value))} className="w-full mt-2" />
+            {LAYOUT_CONTROLS.map(({key,label,min,max,step,unit})=><label key={key} className="block text-xs font-semibold mt-4 first:mt-3">{label} · {Number(effectiveTokens.layout?.[key] || 0)}{unit}
+              <input type="range" min={min} max={max} step={step} value={Number(effectiveTokens.layout?.[key] || 0)} onChange={e=>updateTokens("layout",key,Number(e.target.value))} className="w-full mt-2" />
             </label>)}
           </section>
 
@@ -367,6 +470,72 @@ export default function SiteBuilder() {
           </section>
 
           <section className="rounded-2xl border bg-white p-5">
+            <div className="flex items-center gap-2 font-bold"><CalendarClock size={17}/>Online booking hours</div>
+            <p className="mt-1 text-xs text-slate-500">Set each day independently. These hours are validated by the booking server before a request can be submitted.</p>
+
+            <div className="mt-4 space-y-2">
+              {DAY_LABELS.map(([day,label]) => {
+                const row = businessHours.find((item) => item.weekday === day) || {
+                  clinic_id: activeClinicId,
+                  weekday: day,
+                  enabled: false,
+                  open_time: "09:00",
+                  close_time: "17:00",
+                  slot_minutes: 30,
+                };
+                return <div key={day} className={`grid grid-cols-[72px_1fr] gap-3 rounded-xl border p-3 ${row.enabled?"bg-white":"bg-slate-50"}`}>
+                  <label className="flex items-center gap-2 text-xs font-semibold">
+                    <input
+                      type="checkbox"
+                      checked={row.enabled}
+                      onChange={(event)=>updateBusinessHour(day,{ enabled:event.target.checked, open_time:row.open_time || "09:00", close_time:row.close_time || "17:00" })}
+                    />
+                    {label}
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <input
+                      type="time"
+                      disabled={!row.enabled}
+                      value={(row.open_time || "09:00").slice(0,5)}
+                      onChange={(event)=>updateBusinessHour(day,{ open_time:event.target.value })}
+                      className="min-w-0 rounded-lg border px-2 py-2 text-xs disabled:bg-slate-100"
+                      aria-label={label+" opening time"}
+                    />
+                    <input
+                      type="time"
+                      disabled={!row.enabled}
+                      value={(row.close_time || "17:00").slice(0,5)}
+                      onChange={(event)=>updateBusinessHour(day,{ close_time:event.target.value })}
+                      className="min-w-0 rounded-lg border px-2 py-2 text-xs disabled:bg-slate-100"
+                      aria-label={label+" closing time"}
+                    />
+                    <select
+                      disabled={!row.enabled}
+                      value={row.slot_minutes}
+                      onChange={(event)=>updateBusinessHour(day,{ slot_minutes:Number(event.target.value) })}
+                      className="min-w-0 rounded-lg border bg-white px-2 py-2 text-xs disabled:bg-slate-100"
+                      aria-label={label+" slot interval"}
+                    >
+                      {[15,20,30,45,60].map((value)=><option key={value} value={value}>{value} min</option>)}
+                    </select>
+                  </div>
+                </div>;
+              })}
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <label className="text-xs font-semibold">Minimum notice
+                <select value={Number(bookingSettings.leadTimeHours)} onChange={e=>updateBookingSetting("leadTimeHours",Number(e.target.value))} className="mt-1.5 w-full px-3 py-2.5 rounded-xl border bg-white">
+                  {[0,1,2,4,12,24,48,72].map(value=><option key={value} value={value}>{value === 0 ? "None" : value + " hours"}</option>)}
+                </select>
+              </label>
+              <label className="text-xs font-semibold">Booking horizon · {Number(bookingSettings.horizonDays)} days
+                <input type="range" min="7" max="365" step="7" value={Number(bookingSettings.horizonDays)} onChange={e=>updateBookingSetting("horizonDays",Number(e.target.value))} className="mt-3 w-full" />
+              </label>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border bg-white p-5">
             <div className="font-bold">Sections</div>
             <div className="space-y-2 mt-4">
               {settings.sections.map((section,index)=><div key={section.key} className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-50">
@@ -387,6 +556,8 @@ export default function SiteBuilder() {
               <input value={clinicDraft.address} onChange={e=>setClinicDraft({...clinicDraft,address:e.target.value})} placeholder="Address" className="px-3 py-2.5 rounded-xl border col-span-2" />
               <input value={clinicDraft.city} onChange={e=>setClinicDraft({...clinicDraft,city:e.target.value})} placeholder="City" className="px-3 py-2.5 rounded-xl border" />
               <input value={clinicDraft.country} onChange={e=>setClinicDraft({...clinicDraft,country:e.target.value})} placeholder="Country" className="px-3 py-2.5 rounded-xl border" />
+              <input value={clinicDraft.timezone} onChange={e=>setClinicDraft({...clinicDraft,timezone:e.target.value})} placeholder="Timezone, e.g. Asia/Hebron" className="px-3 py-2.5 rounded-xl border" />
+              <input value={clinicDraft.currency} onChange={e=>setClinicDraft({...clinicDraft,currency:e.target.value.toUpperCase()})} maxLength={3} placeholder="Currency" className="px-3 py-2.5 rounded-xl border uppercase" />
             </div>
           </section>
 

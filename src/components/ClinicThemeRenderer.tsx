@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, CalendarDays, CheckCircle2, Clock3, MapPin, Phone, ShieldCheck, Sparkles, Stethoscope, UserRound } from "lucide-react";
+import { ArrowRight, CalendarDays, CheckCircle2, Clock3, Mail, MapPin, MessageCircle, Phone, ShieldCheck, Sparkles, Stethoscope, UserRound } from "lucide-react";
 import type { PublicClinicSite } from "@/saas/types";
 import { mergeTokens, tokensToStyle } from "@/saas/theme";
 
@@ -16,6 +16,13 @@ const fallbackHero = {
 
 export default function ClinicThemeRenderer({ site, preview = false }: Props) {
   const { clinic, settings, theme, doctors, treatments } = site;
+  const formatMoney = (value: number) => {
+    try {
+      return new Intl.NumberFormat(undefined, { style: "currency", currency: clinic.currency || "USD", maximumFractionDigits: 0 }).format(value);
+    } catch {
+      return `${clinic.currency || "USD"} ${Number(value).toLocaleString()}`;
+    }
+  };
   const tokens = mergeTokens(theme?.default_tokens || {}, settings.tokens || {});
   const style = tokensToStyle(tokens);
   const hero = { ...fallbackHero, ...(settings.content?.hero || {}) };
@@ -97,7 +104,10 @@ export default function ClinicThemeRenderer({ site, preview = false }: Props) {
               treatments.slice(0,9).map(item=><div key={item.id} className="site-card p-6 border" style={{background:"var(--site-bg)",borderColor:"color-mix(in srgb,var(--site-text) 10%,transparent)"}}>
                 <div className="w-10 h-10 rounded-xl grid place-items-center" style={{background:"var(--site-secondary)",color:"var(--site-primary)"}}><CheckCircle2 size={18}/></div>
                 <h3 className="text-xl font-bold mt-5">{item.name_en}</h3>{item.description_en && <p className="text-sm mt-2 leading-relaxed" style={{color:"var(--site-muted)"}}>{item.description_en}</p>}
-                <div className="text-xs mt-4 flex items-center gap-1.5" style={{color:"var(--site-muted)"}}><Clock3 size={13}/>{item.duration_minutes} min</div>
+                <div className="text-xs mt-4 flex flex-wrap items-center gap-x-4 gap-y-1" style={{color:"var(--site-muted)"}}>
+                  <span className="inline-flex items-center gap-1.5"><Clock3 size={13}/>{item.duration_minutes} min</span>
+                  {Number(item.default_price) > 0 && <span className="font-semibold" style={{color:"var(--site-text)"}}>{formatMoney(Number(item.default_price))}</span>}
+                </div>
               </div>)}
           </div>
         </div>
@@ -125,7 +135,7 @@ export default function ClinicThemeRenderer({ site, preview = false }: Props) {
         <div className="site-container">
           <h2 className="text-3xl font-bold mb-8">{journeyCopy.title}</h2>
           <div className="grid lg:grid-cols-3 gap-4">
-            {(journeyCopy.steps || []).map((item: any)=><div key={item.step} className="site-card p-6" style={{background:"var(--site-bg)"}}><div className="text-sm font-bold" style={{color:"var(--site-accent)"}}>{item.step}</div><h3 className="font-bold text-xl mt-4">{item.title}</h3><p className="text-sm mt-2" style={{color:"var(--site-muted)"}}>{item.text}</p></div>)}
+            {(journeyCopy.steps || []).map((item)=><div key={item.step} className="site-card p-6" style={{background:"var(--site-bg)"}}><div className="text-sm font-bold" style={{color:"var(--site-accent)"}}>{item.step}</div><h3 className="font-bold text-xl mt-4">{item.title}</h3><p className="text-sm mt-2" style={{color:"var(--site-muted)"}}>{item.text}</p></div>)}
           </div>
         </div>
       </section>
@@ -145,9 +155,11 @@ export default function ClinicThemeRenderer({ site, preview = false }: Props) {
         <div className="site-container grid md:grid-cols-3 gap-6">
           <div className="md:col-span-2"><h2 className="text-3xl font-bold">{clinic.name}</h2><p className="mt-3 max-w-xl text-sm" style={{color:"var(--site-muted)"}}>{contactCopy.description}</p></div>
           <div className="space-y-3 text-sm">
-            {clinic.phone && <div className="flex items-center gap-2"><Phone size={15}/>{clinic.phone}</div>}
-            {clinic.address && <div className="flex items-start gap-2"><MapPin size={15}/>{clinic.address}</div>}
-            {!clinic.phone && !clinic.address && <div style={{color:"var(--site-muted)"}}>Clinic contact details can be configured in the dashboard.</div>}
+            {clinic.phone && <a href={`tel:${clinic.phone}`} className="flex items-center gap-2 hover:underline"><Phone size={15}/>{clinic.phone}</a>}
+            {clinic.email && <a href={`mailto:${clinic.email}`} className="flex items-center gap-2 hover:underline"><Mail size={15}/>{clinic.email}</a>}
+            {clinic.whatsapp && <a href={`https://wa.me/${clinic.whatsapp.replace(/\\D/g,"")}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:underline"><MessageCircle size={15}/>WhatsApp</a>}
+            {clinic.address && <div className="flex items-start gap-2"><MapPin size={15}/><span>{clinic.address}{clinic.city ? `, ${clinic.city}` : ""}{clinic.country ? `, ${clinic.country}` : ""}</span></div>}
+            {!clinic.phone && !clinic.email && !clinic.whatsapp && !clinic.address && <div style={{color:"var(--site-muted)"}}>Clinic contact details can be configured in the dashboard.</div>}
           </div>
         </div>
       </section>
@@ -181,14 +193,17 @@ export default function ClinicThemeRenderer({ site, preview = false }: Props) {
               {orderedSections.some(s=>s.key==="contact") && <a href={preview?"#":"#contact"} onClick={stopPreview}>Contact</a>}
               <Link onClick={stopPreview} to={patientHref} className="inline-flex items-center gap-1.5"><UserRound size={14}/>Patient Portal</Link>
             </nav>
-            <Link onClick={stopPreview} to={bookingHref} className="site-button px-4 py-2.5 font-semibold text-sm text-white" style={{background:"var(--site-primary)"}}>Book</Link>
+            <div className="flex items-center gap-2">
+              <Link onClick={stopPreview} to={patientHref} aria-label="Patient Portal" className="md:hidden site-button w-10 h-10 grid place-items-center border" style={{borderColor:"color-mix(in srgb,var(--site-text) 14%,transparent)"}}><UserRound size={16}/></Link>
+              <Link onClick={stopPreview} to={bookingHref} className="site-button px-4 py-2.5 font-semibold text-sm text-white" style={{background:"var(--site-primary)"}}>Book</Link>
+            </div>
           </div>
         </header>
 
         {orderedSections.map(section=><Fragment key={section.key}>{renderSection(section.key)}</Fragment>)}
 
         <footer className="py-8 border-t text-sm" style={{borderColor:"color-mix(in srgb,var(--site-text) 10%,transparent)",color:"var(--site-muted)"}}>
-          <div className="site-container flex flex-col md:flex-row gap-3 justify-between"><span>© 2026 {clinic.name}</span><span>Powered by LunaDent</span></div>
+          <div className="site-container flex flex-col md:flex-row gap-3 justify-between"><span>© {new Date().getFullYear()} {clinic.name}</span><span>Powered by LunaDent</span></div>
         </footer>
       </div>
     </div>

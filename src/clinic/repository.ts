@@ -26,6 +26,7 @@ import type {
   PatientDocument,
   TreatmentCatalogItem,
   TreatmentPlan,
+  TreatmentPlanItem,
 } from "./types";
 
 const storageKey = (name: string) => `lunadent_demo_${name}`;
@@ -374,6 +375,113 @@ export const clinicRepository = {
     return created;
   },
 
+  async listTreatmentPlanItems(treatmentPlanId: string): Promise<TreatmentPlanItem[]> {
+    if (supabase) {
+      const { data, error } = await supabase
+        .from("treatment_plan_items")
+        .select("*")
+        .eq("clinic_id", currentClinicId())
+        .eq("treatment_plan_id", treatmentPlanId)
+        .order("sort_order")
+        .order("created_at");
+      if (error) throw error;
+      return (data ?? []) as TreatmentPlanItem[];
+    }
+    return loadLocal<TreatmentPlanItem[]>("treatment_plan_items", [])
+      .filter((item) => item.treatment_plan_id === treatmentPlanId)
+      .sort((a, b) => a.sort_order - b.sort_order);
+  },
+
+  async createTreatmentPlanItem(input: {
+    treatment_plan_id: string;
+    treatment_id?: string | null;
+    tooth_no?: number | null;
+    description: string;
+    quantity: number;
+    unit_price: number;
+    discount?: number;
+  }): Promise<TreatmentPlanItem> {
+    if (!input.treatment_plan_id || !input.description.trim()) throw new Error("Treatment plan and description are required.");
+    if (!(input.quantity > 0) || input.unit_price < 0 || Number(input.discount || 0) < 0) {
+      throw new Error("Quantity and pricing values are invalid.");
+    }
+
+    if (supabase) {
+      const existing = await this.listTreatmentPlanItems(input.treatment_plan_id);
+      const { data, error } = await supabase.from("treatment_plan_items").insert({
+        clinic_id: currentClinicId(),
+        treatment_plan_id: input.treatment_plan_id,
+        treatment_id: input.treatment_id || null,
+        tooth_no: input.tooth_no || null,
+        description: input.description.trim(),
+        quantity: input.quantity,
+        unit_price: input.unit_price,
+        discount: input.discount || 0,
+        status: "planned",
+        sort_order: existing.length,
+      }).select("*").single();
+      if (error) throw error;
+      return data as TreatmentPlanItem;
+    }
+
+    const items = loadLocal<TreatmentPlanItem[]>("treatment_plan_items", []);
+    const created: TreatmentPlanItem = {
+      id: crypto.randomUUID(),
+      treatment_plan_id: input.treatment_plan_id,
+      treatment_id: input.treatment_id || null,
+      tooth_no: input.tooth_no || null,
+      description: input.description.trim(),
+      quantity: input.quantity,
+      unit_price: input.unit_price,
+      discount: input.discount || 0,
+      status: "planned",
+      sort_order: items.filter((item) => item.treatment_plan_id === input.treatment_plan_id).length,
+    };
+    saveLocal("treatment_plan_items", [...items, created]);
+    return created;
+  },
+
+  async updateTreatmentPlanItemStatus(id: string, status: TreatmentPlanItem["status"]): Promise<void> {
+    if (supabase) {
+      const { error } = await supabase
+        .from("treatment_plan_items")
+        .update({ status })
+        .eq("id", id)
+        .eq("clinic_id", currentClinicId());
+      if (error) throw error;
+      return;
+    }
+    const items = loadLocal<TreatmentPlanItem[]>("treatment_plan_items", []);
+    saveLocal("treatment_plan_items", items.map((item) => item.id === id ? { ...item, status } : item));
+  },
+
+  async deleteTreatmentPlanItem(id: string): Promise<void> {
+    if (supabase) {
+      const { error } = await supabase
+        .from("treatment_plan_items")
+        .delete()
+        .eq("id", id)
+        .eq("clinic_id", currentClinicId());
+      if (error) throw error;
+      return;
+    }
+    const items = loadLocal<TreatmentPlanItem[]>("treatment_plan_items", []);
+    saveLocal("treatment_plan_items", items.filter((item) => item.id !== id));
+  },
+
+  async setTreatmentPlanStatus(id: string, status: TreatmentPlan["status"]): Promise<void> {
+    if (supabase) {
+      const { error } = await supabase.rpc("set_treatment_plan_status", {
+        p_treatment_plan_id: id,
+        p_status: status,
+      });
+      if (error) throw error;
+      return;
+    }
+    const plans = loadLocal<TreatmentPlan[]>("treatment_plans", demoTreatmentPlans);
+    saveLocal("treatment_plans", plans.map((plan) => plan.id === id ? { ...plan, status } : plan));
+  },
+
   async listClinicalNotes(patientId: string): Promise<ClinicalNote[]> {
     if (supabase) {
       const { data, error } = await supabase.from("clinical_notes").select("*").eq("clinic_id", currentClinicId()).eq("patient_id", patientId).order("created_at", { ascending: false });
@@ -459,16 +567,109 @@ export const clinicRepository = {
     return patientId ? payments.filter((payment) => payment.patient_id === patientId) : payments;
   },
 
-  async listPatientDocuments(patientId: string, clinicIdOverride?: string | null): Promise<PatientDocument[]> {
+  async listPatientDocuments(
+    patientId: string,
+    clinicIdOverride?: string | null,
+    patientVisibleOnly = true,
+  ): Promise<PatientDocument[]> {
     if (supabase) {
-      let request = supabase.from("patient_documents").select("*").eq("patient_id", patientId).eq("patient_visible", true);
-      const clinicId = clinicIdOverride || (typeof window !== "undefined" ? window.localStorage.getItem("lunadent_active_clinic_id") : null);
-      if (clinicId) request = request.eq("clinic_id", clinicId);
+      let request = supabase
+        .from("patient_documents")
+        .select("*")
+        .eq("patient_id", patientId)
+        .eq("clinic_id", currentClinicId(clinicIdOverride));
+      if (patientVisibleOnly) request = request.eq("patient_visible", true);
       const { data, error } = await request.order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as PatientDocument[];
     }
-    return loadLocal<PatientDocument[]>("documents", demoDocuments).filter((document) => document.patient_id === patientId && document.patient_visible);
+    return loadLocal<PatientDocument[]>("documents", demoDocuments).filter(
+      (document) => document.patient_id === patientId && (!patientVisibleOnly || document.patient_visible),
+    );
+  },
+
+  async uploadPatientDocument(input: {
+    patient_id: string;
+    file: File;
+    title: string;
+    document_type: string;
+    patient_visible: boolean;
+  }): Promise<PatientDocument> {
+    if (!supabase) throw new Error("Live database is required for document uploads.");
+    if (!input.title.trim()) throw new Error("Document title is required.");
+
+    const allowedTypes = new Set([
+      "application/pdf",
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "application/dicom",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ]);
+    if (!allowedTypes.has(input.file.type)) throw new Error("Unsupported file type.");
+    if (input.file.size <= 0 || input.file.size > 25 * 1024 * 1024) throw new Error("Document must be 25 MB or smaller.");
+
+    const clinicId = currentClinicId();
+    const safeName = input.file.name
+      .normalize("NFKD")
+      .replace(/[^a-zA-Z0-9._-]+/g, "-")
+      .replace(/-+/g, "-")
+      .slice(-120) || "document";
+    const storagePath = `${clinicId}/${input.patient_id}/${crypto.randomUUID()}-${safeName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("patient-files")
+      .upload(storagePath, input.file, { upsert: false, contentType: input.file.type });
+    if (uploadError) throw uploadError;
+
+    const { data: identity } = await supabase.auth.getUser();
+    const { data, error } = await supabase.from("patient_documents").insert({
+      clinic_id: clinicId,
+      patient_id: input.patient_id,
+      document_type: input.document_type.trim() || "other",
+      title: input.title.trim(),
+      storage_path: storagePath,
+      mime_type: input.file.type,
+      file_size: input.file.size,
+      patient_visible: input.patient_visible,
+      uploaded_by: identity.user?.id || null,
+    }).select("*").single();
+
+    if (error) {
+      await supabase.storage.from("patient-files").remove([storagePath]).catch(() => undefined);
+      throw error;
+    }
+    return data as PatientDocument;
+  },
+
+  async updatePatientDocumentVisibility(id: string, patientVisible: boolean): Promise<void> {
+    if (!supabase) {
+      const docs = loadLocal<PatientDocument[]>("documents", demoDocuments);
+      saveLocal("documents", docs.map((doc) => doc.id === id ? { ...doc, patient_visible: patientVisible } : doc));
+      return;
+    }
+    const { error } = await supabase
+      .from("patient_documents")
+      .update({ patient_visible: patientVisible })
+      .eq("id", id)
+      .eq("clinic_id", currentClinicId());
+    if (error) throw error;
+  },
+
+  async deletePatientDocument(document: PatientDocument): Promise<void> {
+    if (!supabase) {
+      const docs = loadLocal<PatientDocument[]>("documents", demoDocuments);
+      saveLocal("documents", docs.filter((doc) => doc.id !== document.id));
+      return;
+    }
+    const { error: storageError } = await supabase.storage.from("patient-files").remove([document.storage_path]);
+    if (storageError) throw storageError;
+    const { error } = await supabase
+      .from("patient_documents")
+      .delete()
+      .eq("id", document.id)
+      .eq("clinic_id", currentClinicId());
+    if (error) throw error;
   },
 
   async createPatientDocumentUrl(storagePath: string): Promise<string | null> {
@@ -534,6 +735,17 @@ export const clinicRepository = {
       return (data ?? []) as BookingRequest[];
     }
     return loadLocal<BookingRequest[]>("booking_requests", []);
+  },
+
+  async convertBookingRequest(id: string): Promise<{ patient_id: string; appointment_id: string }> {
+    if (!supabase) throw new Error("Live database is required to convert booking requests.");
+    const { data, error } = await supabase.rpc("convert_booking_request", {
+      p_booking_request_id: id,
+    });
+    if (error) throw error;
+    const result = data as { patient_id?: string; appointment_id?: string } | null;
+    if (!result?.patient_id || !result?.appointment_id) throw new Error("Booking conversion did not return an appointment.");
+    return { patient_id: result.patient_id, appointment_id: result.appointment_id };
   },
 
   async updateBookingRequestStatus(id: string, status: BookingRequest["status"]): Promise<void> {

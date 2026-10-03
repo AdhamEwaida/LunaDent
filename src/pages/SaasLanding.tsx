@@ -15,6 +15,22 @@ const featureCards = [
   { icon: BarChart3, title: "Operations", text: "Doctors, treatments, inventory and clinic dashboards in one workspace." },
 ];
 
+const featureLabels: Record<string, string> = {
+  website: "Branded clinic website",
+  patients: "Patient CRM",
+  appointments: "Appointments & booking",
+  patient_portal: "Secure patient portal",
+  accounting: "Accounting",
+  inventory: "Inventory",
+  all_themes: "All website themes",
+};
+
+const limitLabels: Record<string, string> = {
+  staff: "staff accounts",
+  dentists: "dentists",
+  storage_gb: "GB storage",
+};
+
 const themeAccent: Record<string, string> = {
   modern: "#2457C5",
   luxury: "#3E2A7E",
@@ -187,7 +203,7 @@ export default function SaasLanding() {
         <section id="pricing" className="max-w-7xl mx-auto px-5 py-24">
           <div className="text-center max-w-2xl mx-auto">
             <div className="text-sm font-semibold text-cyan-300">Plans</div>
-            <h2 className="text-4xl md:text-5xl font-bold mt-3">Scale from the first clinic to a network.</h2>
+            <h2 className="text-4xl md:text-5xl font-bold mt-3">Choose the operating level that fits the clinic.</h2>
           </div>
           <div className="grid lg:grid-cols-3 gap-5 mt-12">
             {plans.map((plan)=>(
@@ -196,9 +212,15 @@ export default function SaasLanding() {
                 <p className="text-sm text-slate-400 mt-2 min-h-10">{plan.description}</p>
                 <div className="mt-6"><span className="text-4xl font-black">{plan.currency === "USD" ? "$" : ""}{Number(plan.price_monthly).toFixed(0)}</span><span className="text-slate-400"> / month</span></div>
                 <div className="mt-6 space-y-2 text-sm text-slate-300">
-                  {Object.entries(plan.features || {}).filter(([,enabled])=>enabled).slice(0,7).map(([key])=>(
-                    <div key={key} className="flex items-center gap-2"><Check size={14} className="text-emerald-300" />{key.replaceAll("_"," ")}</div>
+                  {Object.entries(plan.features || {}).filter(([,enabled])=>enabled).map(([key])=>(
+                    <div key={key} className="flex items-center gap-2"><Check size={14} className="text-emerald-300" />{featureLabels[key] || key.replaceAll("_"," ")}</div>
                   ))}
+                  {Object.entries(plan.limits || {}).filter(([key])=>key in limitLabels).map(([key,value])=>(
+                    <div key={key} className="flex items-center gap-2 text-slate-400"><Check size={14} />Up to {value} {limitLabels[key]}</div>
+                  ))}
+                  <a href="#demo" className="mt-6 inline-flex w-full items-center justify-center rounded-xl border border-white/15 px-4 py-3 font-semibold text-white hover:bg-white/5">
+                    Request {plan.name}
+                  </a>
                 </div>
               </div>
             ))}
@@ -242,9 +264,13 @@ export default function SaasLanding() {
       </main>
 
       <footer className="border-t border-white/10 py-8 text-sm text-slate-500">
-        <div className="max-w-7xl mx-auto px-5 flex flex-col md:flex-row gap-3 justify-between">
-          <span>© 2026 LunaDent SaaS</span>
-          <span>Multi-tenant dental clinic platform</span>
+        <div className="max-w-7xl mx-auto px-5 flex flex-col md:flex-row gap-4 justify-between md:items-center">
+          <span>© 2026 LunaDent SaaS · Multi-tenant dental clinic platform</span>
+          <div className="flex flex-wrap gap-4">
+            <Link to="/privacy" className="hover:text-slate-300">Privacy</Link>
+            <Link to="/terms" className="hover:text-slate-300">Terms</Link>
+            <a href="#demo" className="hover:text-slate-300">Contact</a>
+          </div>
         </div>
       </footer>
     </div>
