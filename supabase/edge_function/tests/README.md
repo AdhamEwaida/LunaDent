@@ -68,15 +68,13 @@ Deno.test("Your Function - Basic Test", async () => {
 
 ## Available Test Files
 
-- `remote-advanced.test.ts` - Advanced remote tests using fetch
-- `supabase-client.test.ts` - Tests using Supabase client library
-- `my-function.test.ts` - Template for custom function tests
+- `edge-functions.test.ts` - Compile/security-contract checks plus non-mutating live rejection tests when `SUPABASE_URL` is configured.
 
 ## Creating Edge Functions
 
-To create a new Edge Function:
+To add a new Edge Function:
 
-1. Create a new `.ts` file directly in the `supabase/edge_function/` directory
-2. Copy `example-function.ts` as a starting point
-3. Implement your function logic
-4. Create corresponding test files in the `tests/` directory
+1. Create its source under `supabase/functions/<function-name>/index.ts`.
+2. Add any function-specific Deno configuration beside the source when needed.
+3. Add compile coverage to the shared `test` task.
+4. Add corresponding non-mutating tests in this `tests/` directory.

@@ -9,7 +9,8 @@ const cors = {
 
 const STAFF_ROLES = ["dentist", "receptionist", "accountant"] as const;
 
-type AdminClient = ReturnType<typeof createClient>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Edge admin client intentionally uses the untyped service-role schema boundary.
+type AdminClient = ReturnType<typeof createClient<any>>;
 
 async function getClinicEntitlements(admin: AdminClient, clinicId: string) {
   const [{ data: clinic, error: clinicError }, { data: subscription, error: subscriptionError }] = await Promise.all([

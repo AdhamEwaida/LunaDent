@@ -16,7 +16,8 @@ const DEFAULT_SETTINGS = {
   horizonDays: 90,
 };
 
-type AdminClient = ReturnType<typeof createClient>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Edge admin client intentionally uses the untyped service-role schema boundary.
+type AdminClient = ReturnType<typeof createClient<any>>;
 type BookingSettings = typeof DEFAULT_SETTINGS;
 type UnknownRecord = Record<string, unknown>;
 type PlanSummary = {
