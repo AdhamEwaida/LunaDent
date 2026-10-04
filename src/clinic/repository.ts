@@ -257,7 +257,7 @@ export const clinicRepository = {
       const clinicId = currentClinicId(clinicIdOverride);
       let request = supabase
         .from("appointments")
-        .select("*, patient:patients(id,patient_no,first_name,last_name), doctor:doctors(id,display_name), treatment:treatments(id,name_en,name_ar)")
+        .select("*, patient:patients!appointments_clinic_patient_fkey(id,patient_no,first_name,last_name), doctor:doctors!appointments_clinic_doctor_fkey(id,display_name), treatment:treatments!appointments_clinic_treatment_fkey(id,name_en,name_ar)")
         .eq("clinic_id", clinicId)
         .order("start_at", { ascending: true });
       if (patientId) request = request.eq("patient_id", patientId);
@@ -505,7 +505,7 @@ export const clinicRepository = {
 
   async listInvoices(patientId?: string, clinicIdOverride?: string | null): Promise<Invoice[]> {
     if (supabase) {
-      let request = supabase.from("invoices").select("*, patient:patients(id,patient_no,first_name,last_name)").eq("clinic_id", currentClinicId(clinicIdOverride)).order("created_at", { ascending: false });
+      let request = supabase.from("invoices").select("*, patient:patients!invoices_clinic_patient_fkey(id,patient_no,first_name,last_name)").eq("clinic_id", currentClinicId(clinicIdOverride)).order("created_at", { ascending: false });
       if (patientId) request = request.eq("patient_id", patientId);
       const { data, error } = await request;
       if (error) throw error;
@@ -870,7 +870,7 @@ export const clinicRepository = {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const [patientsRes, apptsRes, invoicesRes, inventoryRes, paymentsRes] = await Promise.all([
       supabase.from("patients").select("id", { count: "exact", head: true }).eq("clinic_id", clinicId).neq("status", "archived"),
-      supabase.from("appointments").select("*, patient:patients(id,patient_no,first_name,last_name), doctor:doctors(id,display_name), treatment:treatments(id,name_en,name_ar)").eq("clinic_id", clinicId).gte("start_at", dayStart.toISOString()).lte("start_at", dayEnd.toISOString()).order("start_at").limit(8),
+      supabase.from("appointments").select("*, patient:patients!appointments_clinic_patient_fkey(id,patient_no,first_name,last_name), doctor:doctors!appointments_clinic_doctor_fkey(id,display_name), treatment:treatments!appointments_clinic_treatment_fkey(id,name_en,name_ar)").eq("clinic_id", clinicId).gte("start_at", dayStart.toISOString()).lte("start_at", dayEnd.toISOString()).order("start_at").limit(8),
       supabase.from("invoices").select("balance_due").eq("clinic_id", clinicId).neq("status", "void"),
       supabase.from("inventory_items").select("quantity,minimum_stock").eq("clinic_id", clinicId).eq("active", true),
       supabase.from("payments").select("amount").eq("clinic_id", clinicId).gte("paid_at", monthStart.toISOString()),
