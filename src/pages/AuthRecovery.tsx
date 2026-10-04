@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { CheckCircle2, KeyRound, Mail, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { getCustomDomainHostname, getPlatformHomeUrl } from "@/saas/publicRouting";
 
 function safeNext(value: string | null) {
   if (!value || !value.startsWith("/") || value.startsWith("//")) return "/staff/login";
@@ -59,7 +60,8 @@ export default function AuthRecovery() {
     setError("");
     setMessage("");
     try {
-      const redirectTo = `${window.location.origin}/auth/reset-password?mode=update&next=${encodeURIComponent(next)}`;
+      const recoveryOrigin = getCustomDomainHostname() ? getPlatformHomeUrl() : window.location.origin;
+      const redirectTo = `${recoveryOrigin}/auth/reset-password?mode=update&next=${encodeURIComponent(next)}`;
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo });
       if (resetError) throw resetError;
       setMessage("If an account exists for that email, a password-reset link has been sent. Check your inbox and spam folder.");

@@ -368,7 +368,12 @@ export type Database = {
           clinic_id: string
           content: Json
           custom_domain: string | null
+          domain_error: string | null
+          domain_last_checked_at: string | null
+          domain_requested_at: string | null
+          domain_status: string
           domain_verified: boolean
+          domain_verified_at: string | null
           favicon_url: string | null
           hero_image_url: string | null
           logo_url: string | null
@@ -387,7 +392,12 @@ export type Database = {
           clinic_id: string
           content?: Json
           custom_domain?: string | null
+          domain_error?: string | null
+          domain_last_checked_at?: string | null
+          domain_requested_at?: string | null
+          domain_status?: string
           domain_verified?: boolean
+          domain_verified_at?: string | null
           favicon_url?: string | null
           hero_image_url?: string | null
           logo_url?: string | null
@@ -406,7 +416,12 @@ export type Database = {
           clinic_id?: string
           content?: Json
           custom_domain?: string | null
+          domain_error?: string | null
+          domain_last_checked_at?: string | null
+          domain_requested_at?: string | null
+          domain_status?: string
           domain_verified?: boolean
+          domain_verified_at?: string | null
           favicon_url?: string | null
           hero_image_url?: string | null
           logo_url?: string | null

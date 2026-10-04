@@ -68,7 +68,7 @@ Deno.test("Your Function - Basic Test", async () => {
 
 ## Available Test Files
 
-- `edge-functions.test.ts` - Compile/security-contract checks plus non-mutating live rejection tests when `SUPABASE_URL` is configured.
+- `edge-functions.test.ts` - Compile/security-contract checks for clinic user management, SaaS management, public booking, and custom-domain provisioning, plus non-mutating live rejection tests when `SUPABASE_URL` is configured.
 
 ## Creating Edge Functions
 

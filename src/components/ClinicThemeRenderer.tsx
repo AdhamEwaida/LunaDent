@@ -2,6 +2,7 @@ import { Fragment } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, CalendarDays, CheckCircle2, Clock3, Mail, MapPin, MessageCircle, Phone, ShieldCheck, Sparkles, Stethoscope, UserRound } from "lucide-react";
 import type { PublicClinicSite } from "@/saas/types";
+import { clinicPublicHref } from "@/saas/publicRouting";
 import { mergeTokens, tokensToStyle } from "@/saas/theme";
 
 type Props = { site: PublicClinicSite; preview?: boolean };
@@ -57,8 +58,9 @@ export default function ClinicThemeRenderer({ site, preview = false }: Props) {
     description: settings.tagline || "Modern dental care with a connected patient experience.",
     ...(settings.content?.contact || {}),
   };
-  const bookingHref = preview ? "#" : `/c/${clinic.slug}/booking`;
-  const patientHref = preview ? "#" : `/c/${clinic.slug}/patient/login`;
+  const homeHref = preview ? "#" : clinicPublicHref(site);
+  const bookingHref = preview ? "#" : clinicPublicHref(site, "/booking");
+  const patientHref = preview ? "#" : clinicPublicHref(site, "/patient/login");
   const themeKey = settings.theme_key || "modern";
   const shellClass = themeKey === "luxury" ? "site-theme-luxury" : themeKey === "clinical" ? "site-theme-clinical" : "site-theme-modern";
   const orderedSections = (settings.sections?.length ? settings.sections : [
@@ -183,7 +185,7 @@ export default function ClinicThemeRenderer({ site, preview = false }: Props) {
       <div className="site-root flex flex-col">
         <header className="border-b sticky top-0 z-30 backdrop-blur-xl" style={{height:"var(--site-nav-height)", background:"color-mix(in srgb,var(--site-bg) 92%,transparent)", borderColor:"color-mix(in srgb,var(--site-text) 10%,transparent)"}}>
           <div className="site-container h-full flex items-center justify-between gap-5">
-            <Link onClick={stopPreview} to={preview?"#":`/c/${clinic.slug}`} className="flex items-center gap-3 min-w-0">
+            <Link onClick={stopPreview} to={homeHref} className="flex items-center gap-3 min-w-0">
               {settings.logo_url ? <img src={settings.logo_url} alt={clinic.name} className="h-10 max-w-36 object-contain" /> : <span className="w-10 h-10 grid place-items-center font-bold text-white site-button" style={{background:"var(--site-primary)"}}>{clinic.name.slice(0,1).toUpperCase()}</span>}
               <span className="font-bold truncate">{settings.site_title || clinic.name}</span>
             </Link>

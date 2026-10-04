@@ -1,6 +1,7 @@
 export type PlatformRole = "user" | "super_admin";
 export type ClinicRole = "clinic_owner" | "dentist" | "receptionist" | "accountant";
 export type ClinicStatus = "trialing" | "active" | "suspended" | "archived";
+export type DomainStatus = "not_configured" | "pending" | "dns_required" | "verifying" | "active" | "failed";
 
 export type Clinic = {
   id: string;
@@ -147,6 +148,11 @@ export type ClinicSiteSettings = {
   published: boolean;
   custom_domain?: string | null;
   domain_verified: boolean;
+  domain_status?: DomainStatus;
+  domain_requested_at?: string | null;
+  domain_verified_at?: string | null;
+  domain_last_checked_at?: string | null;
+  domain_error?: string | null;
   site_title?: string | null;
   tagline?: string | null;
   logo_url?: string | null;
@@ -183,7 +189,37 @@ export type Subscription = {
   plan?: SaasPlan | null;
 };
 
-export type ClinicSiteSummary = Pick<ClinicSiteSettings, "theme_key" | "published" | "custom_domain">;
+export type ClinicSiteSummary = Pick<ClinicSiteSettings, "theme_key" | "published" | "custom_domain" | "domain_verified" | "domain_status">;
+
+export type DomainVerificationRecord = {
+  type?: string;
+  domain?: string;
+  value?: string;
+  reason?: string;
+};
+
+export type ClinicDomainState = {
+  domain: string | null;
+  status: DomainStatus;
+  verified: boolean;
+  ownership_verified?: boolean;
+  configured_by?: string | null;
+  entitlement?: boolean;
+  plan_code?: string;
+  provider_configured?: boolean;
+  verification?: DomainVerificationRecord[];
+  dns?: {
+    misconfigured?: boolean | null;
+    apex_name?: string | null;
+    record_name?: string;
+    recommended_ipv4?: string[];
+    recommended_cname?: string[];
+  };
+  error?: string | null;
+  warning?: string;
+  ok?: boolean;
+};
+
 export type SubscriptionWithPlan = Omit<Subscription, "plan"> & { plan?: SaasPlan | null };
 
 export type ClinicCommercialRow = Clinic & {

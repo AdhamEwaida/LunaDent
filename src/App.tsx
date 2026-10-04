@@ -4,6 +4,7 @@ import { AuthProvider } from "@/auth/AuthContext";
 import ProtectedRoute from "@/auth/ProtectedRoute";
 import SuperAdminRoute from "@/auth/SuperAdminRoute";
 import AppErrorBoundary, { RouteFallback } from "@/components/AppErrorBoundary";
+import { getCustomDomainHostname } from "@/saas/publicRouting";
 
 const StaffLogin = lazy(() => import("@/pages/staff/Login"));
 const StaffChangePassword = lazy(() => import("@/pages/staff/ChangePassword"));
@@ -38,6 +39,7 @@ function NotFound() {
 }
 
 export default function App() {
+  const customDomainHost = Boolean(getCustomDomainHostname());
   const staffRoles = ["admin", "dentist", "receptionist", "accountant"] as const;
   const secureAdmin = (roles: Array<(typeof staffRoles)[number]>) => (
     <ProtectedRoute roles={roles}>
@@ -66,8 +68,20 @@ export default function App() {
         <BrowserRouter>
           <Suspense fallback={<RouteFallback />}>
             <Routes>
-              <Route path="/" element={<SaasLanding />} />
+              <Route path="/" element={customDomainHost ? <ClinicSite /> : <SaasLanding />} />
               <Route path="/super-admin" element={<SuperAdminRoute><SuperAdmin /></SuperAdminRoute>} />
+
+              {customDomainHost && <>
+                <Route path="/booking" element={<ClinicBooking />} />
+                <Route path="/patient/login" element={<PatientPortalLive />} />
+                <Route path="/patient/signup" element={<PatientSignup />} />
+                <Route path="/patient/complete-profile" element={<CompletePatientProfile />} />
+                <Route path="/patient" element={<PatientPortalLive />} />
+                <Route path="/patient/appointments" element={<PatientPortalLive />} />
+                <Route path="/patient/invoices" element={<PatientPortalLive />} />
+                <Route path="/patient/payments" element={<PatientPortalLive />} />
+                <Route path="/patient/documents" element={<PatientPortalLive />} />
+              </>}
 
               <Route path="/c/:clinicSlug" element={<ClinicSite />} />
               <Route path="/c/:clinicSlug/booking" element={<ClinicBooking />} />
@@ -122,7 +136,7 @@ export default function App() {
               <Route path="/accounting/statement" element={<Navigate to="/accounting/reports" replace />} />
               <Route path="/accounting/settings" element={<Navigate to="/accounting" replace />} />
 
-              <Route path="/booking" element={<Navigate to="/c/lunadent-demo/booking" replace />} />
+              {!customDomainHost && <Route path="/booking" element={<Navigate to="/c/lunadent-demo/booking" replace />} />}
               <Route path="/patient-portal/*" element={<Navigate to="/c/lunadent-demo/patient" replace />} />
               <Route path="/treatments" element={<Navigate to="/c/lunadent-demo" replace />} />
               <Route path="/doctors" element={<Navigate to="/c/lunadent-demo" replace />} />

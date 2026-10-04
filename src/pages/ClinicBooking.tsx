@@ -1,9 +1,9 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { CalendarDays, CheckCircle2, ChevronLeft, Clock3, MessageCircle, ShieldCheck, UserRound } from "lucide-react";
-import { saasRepository } from "@/saas/repository";
+import { clinicPublicHref, getPlatformHomeUrl, usePublicClinicSite } from "@/saas/publicRouting";
 import { supabase } from "@/lib/supabase";
-import type { BookingSettings, PublicClinicSite } from "@/saas/types";
+import type { BookingSettings } from "@/saas/types";
 
 type AvailabilityResponse = {
   slots: string[];
@@ -39,9 +39,7 @@ function friendlyTime(time: string) {
 }
 
 export default function ClinicBooking() {
-  const { clinicSlug = "" } = useParams();
-  const [site, setSite] = useState<PublicClinicSite | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { site, loading, error: clinicLoadError } = usePublicClinicSite();
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [slots, setSlots] = useState<string[]>([]);
   const [horizonDays, setHorizonDays] = useState(90);
@@ -69,20 +67,12 @@ export default function ClinicBooking() {
   }, [horizonDays]);
 
   useEffect(() => {
-    let active = true;
-    void saasRepository.getClinicSiteBySlug(clinicSlug)
-      .then((data) => {
-        if (!active) return;
-        setSite(data);
-        const configuredHorizon = Number(data?.settings.content.bookingSettings?.horizonDays);
-        if (Number.isFinite(configuredHorizon) && configuredHorizon >= 7 && configuredHorizon <= 365) {
-          setHorizonDays(configuredHorizon);
-        }
-      })
-      .catch((err) => active && setError(err instanceof Error ? err.message : "Unable to load clinic."))
-      .finally(() => active && setLoading(false));
-    return () => { active = false; };
-  }, [clinicSlug]);
+    if (clinicLoadError) setError(clinicLoadError);
+    const configuredHorizon = Number(site?.settings.content.bookingSettings?.horizonDays);
+    if (Number.isFinite(configuredHorizon) && configuredHorizon >= 7 && configuredHorizon <= 365) {
+      setHorizonDays(configuredHorizon);
+    }
+  }, [site, clinicLoadError]);
 
   const selectedTreatment = site?.treatments.find((item) => item.id === form.treatment_id);
   const selectedDoctor = site?.doctors.find((item) => item.id === form.doctor_id);
@@ -185,7 +175,7 @@ export default function ClinicBooking() {
   }
 
   if (!site) {
-    return <div className="min-h-screen grid place-items-center bg-slate-50"><Link to="/" className="font-semibold">Clinic not found · Back to LunaDent</Link></div>;
+    return <div className="min-h-screen grid place-items-center bg-slate-50"><a href={getPlatformHomeUrl()} className="font-semibold">Clinic not found · Back to LunaDent</a></div>;
   }
 
   if (requestId) {
@@ -204,7 +194,7 @@ export default function ClinicBooking() {
             <div className="mt-2 flex justify-between gap-4"><span className="text-slate-500">Preferred time</span><b>{form.preferred_date} · {friendlyTime(form.preferred_time)}</b></div>
           </div>
           <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
-            <Link to={`/c/${site.clinic.slug}`} className="px-5 py-3 rounded-xl text-white font-semibold" style={{ background: site.settings.tokens?.colors?.primary || "#2457C5" }}>
+            <Link to={clinicPublicHref(site)} className="px-5 py-3 rounded-xl text-white font-semibold" style={{ background: site.settings.tokens?.colors?.primary || "#2457C5" }}>
               Back to clinic
             </Link>
             {whatsappHref && (
@@ -222,7 +212,7 @@ export default function ClinicBooking() {
     <div className="min-h-screen bg-slate-50">
       <header className="border-b bg-white">
         <div className="max-w-5xl mx-auto h-16 px-5 flex items-center justify-between">
-          <Link to={`/c/${site.clinic.slug}`} className="inline-flex items-center gap-2 font-semibold">
+          <Link to={clinicPublicHref(site)} className="inline-flex items-center gap-2 font-semibold">
             <ChevronLeft size={16} />{site.clinic.name}
           </Link>
           <span className="inline-flex items-center gap-1.5 text-xs text-slate-500"><ShieldCheck size={14} />Secure booking</span>

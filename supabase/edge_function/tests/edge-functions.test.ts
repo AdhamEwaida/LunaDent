@@ -13,6 +13,9 @@ Deno.test("Edge sources retain required security guards", async () => {
   const publicBooking = await Deno.readTextFile(
     "../functions/public-booking/index.ts",
   );
+  const clinicDomain = await Deno.readTextFile(
+    "../functions/manage-clinic-domain/index.ts",
+  );
 
   assert(clinicUsers.includes('authHeader?.startsWith("Bearer ")'));
   assert(clinicUsers.includes('platform_role === "super_admin"'));
@@ -27,6 +30,12 @@ Deno.test("Edge sources retain required security guards", async () => {
   assert(publicBooking.includes("booking_abuse_events"));
   assert(publicBooking.includes("RATE_LIMITED"));
   assert(publicBooking.includes("loadAvailability"));
+
+  assert(clinicDomain.includes('authHeader?.startsWith("Bearer ")'));
+  assert(clinicDomain.includes('membership.role === "clinic_owner"'));
+  assert(clinicDomain.includes("VERCEL_TOKEN"));
+  assert(clinicDomain.includes("/v10/projects/"));
+  assert(clinicDomain.includes("domain_verified"));
 });
 
 Deno.test({

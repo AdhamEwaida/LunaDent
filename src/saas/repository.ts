@@ -3,6 +3,7 @@ import type {
   Clinic,
   ClinicBusinessHour,
   ClinicCommercialRow,
+  ClinicDomainState,
   ClinicMembership,
   ClinicSiteSettings,
   PublicClinicSite,
@@ -13,6 +14,34 @@ import type {
 function requireSupabase() {
   if (!supabase) throw new Error("Supabase is not configured.");
   return supabase;
+}
+
+async function loadPublicClinicSite(clinic: Clinic): Promise<PublicClinicSite | null> {
+  const db = requireSupabase();
+  const [{ data: settings, error: settingsError }, { data: doctors, error: doctorsError }, { data: treatments, error: treatmentsError }] = await Promise.all([
+    db.from("clinic_site_settings").select("*").eq("clinic_id", clinic.id).maybeSingle(),
+    db.from("doctors").select("id,display_name,specialty,bio_en").eq("clinic_id", clinic.id).eq("active", true).order("display_name"),
+    db.from("treatments").select("id,code,name_en,name_ar,description_en,duration_minutes,default_price").eq("clinic_id", clinic.id).eq("active", true).order("name_en"),
+  ]);
+  if (settingsError) throw settingsError;
+  if (doctorsError) throw doctorsError;
+  if (treatmentsError) throw treatmentsError;
+  if (!settings?.published) return null;
+
+  const { data: theme, error: themeError } = await db
+    .from("themes")
+    .select("*")
+    .eq("key", settings.theme_key)
+    .maybeSingle();
+  if (themeError) throw themeError;
+
+  return {
+    clinic,
+    settings: settings as ClinicSiteSettings,
+    theme: (theme as ThemeDefinition | null) ?? null,
+    doctors: doctors ?? [],
+    treatments: treatments ?? [],
+  };
 }
 
 export const saasRepository = {
@@ -47,36 +76,38 @@ export const saasRepository = {
     const { data: clinic, error: clinicError } = await db
       .from("clinics")
       .select("*")
-      .eq("slug", slug)
+      .eq("slug", slug.trim().toLowerCase())
       .in("status", ["trialing", "active"])
       .maybeSingle();
     if (clinicError) throw clinicError;
     if (!clinic) return null;
+    return loadPublicClinicSite(clinic as Clinic);
+  },
 
-    const [{ data: settings, error: settingsError }, { data: doctors, error: doctorsError }, { data: treatments, error: treatmentsError }] = await Promise.all([
-      db.from("clinic_site_settings").select("*").eq("clinic_id", clinic.id).maybeSingle(),
-      db.from("doctors").select("id,display_name,specialty,bio_en").eq("clinic_id", clinic.id).eq("active", true).order("display_name"),
-      db.from("treatments").select("id,code,name_en,name_ar,description_en,duration_minutes,default_price").eq("clinic_id", clinic.id).eq("active", true).order("name_en"),
-    ]);
-    if (settingsError) throw settingsError;
-    if (doctorsError) throw doctorsError;
-    if (treatmentsError) throw treatmentsError;
-    if (!settings?.published) return null;
+  async getClinicSiteByDomain(domain: string): Promise<PublicClinicSite | null> {
+    const db = requireSupabase();
+    const hostname = domain.trim().toLowerCase().replace(/\.$/, "");
+    if (!hostname) return null;
 
-    const { data: theme, error: themeError } = await db
-      .from("themes")
-      .select("*")
-      .eq("key", settings.theme_key)
+    const { data: settings, error: settingsError } = await db
+      .from("clinic_site_settings")
+      .select("clinic_id")
+      .eq("custom_domain", hostname)
+      .eq("domain_verified", true)
+      .eq("published", true)
       .maybeSingle();
-    if (themeError) throw themeError;
+    if (settingsError) throw settingsError;
+    if (!settings?.clinic_id) return null;
 
-    return {
-      clinic: clinic as Clinic,
-      settings: settings as ClinicSiteSettings,
-      theme: (theme as ThemeDefinition | null) ?? null,
-      doctors: doctors ?? [],
-      treatments: treatments ?? [],
-    };
+    const { data: clinic, error: clinicError } = await db
+      .from("clinics")
+      .select("*")
+      .eq("id", settings.clinic_id)
+      .in("status", ["trialing", "active"])
+      .maybeSingle();
+    if (clinicError) throw clinicError;
+    if (!clinic) return null;
+    return loadPublicClinicSite(clinic as Clinic);
   },
 
   async getSiteSettings(clinicId: string): Promise<ClinicSiteSettings> {
@@ -121,7 +152,6 @@ export const saasRepository = {
     const safePatch = {
       theme_key: patch.theme_key,
       published: patch.published,
-      custom_domain: patch.custom_domain,
       site_title: patch.site_title,
       tagline: patch.tagline,
       logo_url: patch.logo_url,
@@ -175,7 +205,7 @@ export const saasRepository = {
     const db = requireSupabase();
     const { data, error } = await db
       .from("clinics")
-      .select("*, subscription:subscriptions(*,plan:plans(*)), site:clinic_site_settings(theme_key,published,custom_domain)")
+      .select("*, subscription:subscriptions(*,plan:plans(*)), site:clinic_site_settings(theme_key,published,custom_domain,domain_verified)")
       .order("created_at", { ascending: false });
     if (error) throw error;
     return (data ?? []) as unknown as ClinicCommercialRow[];
@@ -225,5 +255,33 @@ export const saasRepository = {
     if (error) throw error;
     if (data?.error) throw new Error(String(data.error));
     return data;
+  },
+
+  async manageClinicDomain(
+    clinicId: string,
+    action: "status" | "connect" | "verify" | "remove",
+    domain?: string,
+  ): Promise<ClinicDomainState> {
+    const db = requireSupabase();
+    const { data, error } = await db.functions.invoke("manage-clinic-domain", {
+      body: { action, clinic_id: clinicId, ...(domain ? { domain } : {}) },
+    });
+    if (data?.error) throw new Error(String(data.error));
+    if (error) {
+      let message = error.message || "Custom domain service is unavailable.";
+      const context = typeof error === "object" && error !== null && "context" in error
+        ? (error as { context?: unknown }).context
+        : undefined;
+      if (context instanceof Response) {
+        try {
+          const payload = await context.clone().json();
+          if (payload?.error) message = String(payload.error);
+        } catch {
+          // Keep the transport message.
+        }
+      }
+      throw new Error(message);
+    }
+    return data as ClinicDomainState;
   },
 };

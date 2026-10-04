@@ -262,6 +262,21 @@ Deno.serve(async (req: Request) => {
         .single();
       if (planError || !plan) return Response.json({ error: "Invalid plan." }, { status: 400, headers: cors });
 
+      if (!plan.features?.custom_domain) {
+        const { data: siteSettings, error: siteSettingsError } = await admin
+          .from("clinic_site_settings")
+          .select("custom_domain")
+          .eq("clinic_id", clinicId)
+          .maybeSingle();
+        if (siteSettingsError) throw siteSettingsError;
+        if (siteSettings?.custom_domain) {
+          return Response.json(
+            { error: "Disconnect the clinic custom domain before switching to a plan that does not include custom domains." },
+            { status: 409, headers: cors },
+          );
+        }
+      }
+
       const { error } = await admin.from("subscriptions").update({
         plan_id: plan.id,
         status: "active",
@@ -280,14 +295,6 @@ Deno.serve(async (req: Request) => {
           .update({ theme_key: "modern", tokens: modernTheme.default_tokens })
           .eq("clinic_id", clinicId);
         if (siteThemeError) throw siteThemeError;
-      }
-
-      if (!plan.features?.custom_domain) {
-        const { error: domainError } = await admin
-          .from("clinic_site_settings")
-          .update({ custom_domain: null, domain_verified: false })
-          .eq("clinic_id", clinicId);
-        if (domainError) throw domainError;
       }
 
       await admin.from("audit_logs").insert({

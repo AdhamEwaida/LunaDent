@@ -1,10 +1,10 @@
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, CalendarClock, Check, Eye, ImagePlus, Palette, Save, SlidersHorizontal, Type, Upload } from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarClock, Check, ExternalLink, Eye, Globe2, ImagePlus, Palette, RefreshCw, Save, SlidersHorizontal, Trash2, Type, Upload } from "lucide-react";
 import ClinicThemeRenderer from "@/components/ClinicThemeRenderer";
 import { useAuth } from "@/auth/AuthContext";
 import { saasRepository } from "@/saas/repository";
 import { supabase } from "@/lib/supabase";
-import type { BookingSettings, ClinicBusinessHour, ClinicSiteSettings, PublicClinicSite, SiteTokens, ThemeDefinition } from "@/saas/types";
+import type { BookingSettings, ClinicBusinessHour, ClinicDomainState, ClinicSiteSettings, PublicClinicSite, SiteTokens, ThemeDefinition } from "@/saas/types";
 
 const colorFields: Array<[keyof NonNullable<SiteTokens["colors"]>, string]> = [
   ["primary","Primary"],
@@ -84,6 +84,9 @@ export default function SiteBuilder() {
   const [doctors, setDoctors] = useState<PublicClinicSite["doctors"]>([]);
   const [treatments, setTreatments] = useState<PublicClinicSite["treatments"]>([]);
   const [businessHours, setBusinessHours] = useState<ClinicBusinessHour[]>([]);
+  const [domainDraft, setDomainDraft] = useState("");
+  const [domainState, setDomainState] = useState<ClinicDomainState | null>(null);
+  const [domainBusy, setDomainBusy] = useState(false);
   const [clinicDraft, setClinicDraft] = useState({
     name: "",
     phone: "",
@@ -112,6 +115,13 @@ export default function SiteBuilder() {
       ]);
       setThemes(themeRows);
       setSettings(siteSettings);
+      setDomainDraft(siteSettings.custom_domain || "");
+      setDomainState({
+        domain: siteSettings.custom_domain || null,
+        status: siteSettings.domain_status || (siteSettings.domain_verified ? "active" : siteSettings.custom_domain ? "pending" : "not_configured"),
+        verified: Boolean(siteSettings.domain_verified),
+        error: siteSettings.domain_error || null,
+      });
       setBusinessHours(hoursRows);
       setDoctors(doctorsRes.data ?? []);
       setTreatments(treatmentsRes.data ?? []);
@@ -139,6 +149,7 @@ export default function SiteBuilder() {
     ...(settings?.content.bookingSettings || {}),
   };
   const effectiveTokens = useMemo(() => deepMergeTokens(selectedTheme?.default_tokens || {}, settings?.tokens || {}), [selectedTheme, settings?.tokens]);
+  const customDomainEnabled = Boolean(entitlements?.usable && entitlements?.plan?.features?.custom_domain);
 
   const previewSite = useMemo<PublicClinicSite | null>(() => {
     if (!activeClinic || !settings) return null;
@@ -151,9 +162,46 @@ export default function SiteBuilder() {
     };
   }, [activeClinic, clinicDraft, settings, effectiveTokens, selectedTheme, doctors, treatments]);
 
+  useEffect(() => {
+    if (!activeClinicId || !settings?.custom_domain || !customDomainEnabled) return;
+    let active = true;
+    void saasRepository.manageClinicDomain(activeClinicId, "status")
+      .then((state) => {
+        if (active) setDomainState(state);
+      })
+      .catch((err) => {
+        if (active) setDomainState((current) => ({
+          domain: settings.custom_domain || current?.domain || null,
+          status: current?.status || "failed",
+          verified: current?.verified || false,
+          error: err instanceof Error ? err.message : "Unable to refresh domain status.",
+        }));
+      });
+    return () => {
+      active = false;
+    };
+  }, [activeClinicId, settings?.custom_domain, customDomainEnabled]);
+
   if (!activeClinicId || !activeClinic) return <div className="p-8 text-sm">Select a clinic before opening Website Builder.</div>;
   if (activeClinicRole !== "clinic_owner") return <div className="p-8 text-sm">Only the Clinic Owner can change the public website.</div>;
   if (!settings) return <div className="p-8 text-sm">{error || "Loading Website Builder..."}</div>;
+
+  const websiteHref = settings.domain_verified && settings.custom_domain
+    ? `https://${settings.custom_domain}`
+    : `/c/${activeClinic.slug}`;
+  const effectiveDomainState = domainState || {
+    domain: settings.custom_domain || null,
+    status: settings.domain_status || (settings.domain_verified ? "active" : settings.custom_domain ? "pending" : "not_configured"),
+    verified: Boolean(settings.domain_verified),
+  };
+  const domainStatusLabel: Record<string, string> = {
+    not_configured: "Not connected",
+    pending: "Pending",
+    dns_required: "DNS required",
+    verifying: "Verifying",
+    active: "Active",
+    failed: "Needs attention",
+  };
 
   const updateTokens = (group: "colors" | "typography" | "layout", key: string, value: string | number) => {
     setSettings(current => current ? {
@@ -279,6 +327,71 @@ export default function SiteBuilder() {
     }
   };
 
+  const applyDomainState = (state: ClinicDomainState) => {
+    setDomainState(state);
+    setDomainDraft(state.domain || "");
+    setSettings((current) => current ? {
+      ...current,
+      custom_domain: state.domain,
+      domain_status: state.status,
+      domain_verified: state.verified,
+      domain_error: state.error || null,
+    } : current);
+  };
+
+  const connectDomain = async () => {
+    if (!activeClinicId || !customDomainEnabled) return;
+    setDomainBusy(true);
+    setMessage("");
+    setError("");
+    try {
+      const state = await saasRepository.manageClinicDomain(activeClinicId, "connect", domainDraft);
+      applyDomainState(state);
+      setMessage(state.verified
+        ? "Custom domain connected and active."
+        : "Domain connected. Complete the DNS records below, then verify again.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to connect the custom domain.");
+    } finally {
+      setDomainBusy(false);
+    }
+  };
+
+  const refreshDomain = async (verify = false) => {
+    if (!activeClinicId || !settings.custom_domain) return;
+    setDomainBusy(true);
+    setMessage("");
+    setError("");
+    try {
+      const state = await saasRepository.manageClinicDomain(activeClinicId, verify ? "verify" : "status");
+      applyDomainState(state);
+      setMessage(state.verified
+        ? "Domain verification complete. HTTPS is ready."
+        : "DNS is not ready yet. Review the records below and try again after propagation.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to check the custom domain.");
+    } finally {
+      setDomainBusy(false);
+    }
+  };
+
+  const removeDomain = async () => {
+    if (!activeClinicId || !settings.custom_domain) return;
+    if (!window.confirm(`Disconnect ${settings.custom_domain} from this clinic website?`)) return;
+    setDomainBusy(true);
+    setMessage("");
+    setError("");
+    try {
+      const state = await saasRepository.manageClinicDomain(activeClinicId, "remove");
+      applyDomainState(state);
+      setMessage("Custom domain disconnected. The LunaDent clinic URL remains available.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to disconnect the custom domain.");
+    } finally {
+      setDomainBusy(false);
+    }
+  };
+
   const save = async () => {
     const toMinutes = (value: string) => {
       const [hour, minute] = value.slice(0,5).split(":").map(Number);
@@ -323,7 +436,7 @@ export default function SiteBuilder() {
           <p className="text-sm mt-1" style={{color:"var(--muted-foreground)"}}>Change the theme, colors, fonts, sizes, spacing, images, content and visible sections without editing code.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <a href={`/c/${activeClinic.slug}`} target="_blank" rel="noreferrer" className="px-4 py-2.5 rounded-xl border text-sm font-semibold inline-flex items-center gap-2"><Eye size={15}/>Open Website</a>
+          <a href={websiteHref} target="_blank" rel="noreferrer" className="px-4 py-2.5 rounded-xl border text-sm font-semibold inline-flex items-center gap-2"><Eye size={15}/>Open Website</a>
           <button onClick={()=>setSettings({...settings,published:!settings.published})} className={`px-4 py-2.5 rounded-xl text-sm font-semibold border ${settings.published?"bg-emerald-50 text-emerald-700 border-emerald-200":"bg-amber-50 text-amber-700 border-amber-200"}`}>
             {settings.published?"Published":"Draft"}
           </button>
@@ -354,6 +467,136 @@ export default function SiteBuilder() {
                 </button>;
               })}
             </div>
+          </section>
+
+          <section className="rounded-2xl border bg-white p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 font-bold"><Globe2 size={17}/>Custom domain</div>
+              <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                effectiveDomainState.verified
+                  ? "bg-emerald-50 text-emerald-700"
+                  : effectiveDomainState.status === "failed"
+                    ? "bg-red-50 text-red-700"
+                    : "bg-slate-100 text-slate-600"
+              }`}>
+                {domainStatusLabel[effectiveDomainState.status] || effectiveDomainState.status}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              Connect a domain you already own. LunaDent provisions it on Vercel, checks DNS, and keeps the clinic tenant mapping in Supabase.
+            </p>
+
+            {!customDomainEnabled ? (
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                Custom domains are available on Pro and Enterprise. Your LunaDent clinic URL remains available on the current plan.
+              </div>
+            ) : (
+              <div className="mt-4 space-y-3">
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    value={domainDraft}
+                    onChange={(event)=>setDomainDraft(event.target.value)}
+                    placeholder="www.yourclinic.com"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    className="min-w-0 flex-1 rounded-xl border px-3 py-2.5 text-sm"
+                  />
+                  <button
+                    type="button"
+                    disabled={domainBusy || !domainDraft.trim()}
+                    onClick={()=>void connectDomain()}
+                    className="rounded-xl border px-4 py-2.5 text-sm font-semibold disabled:opacity-50"
+                  >
+                    {domainBusy ? "Working..." : settings.custom_domain ? "Update domain" : "Connect domain"}
+                  </button>
+                </div>
+
+                {settings.custom_domain && (
+                  <div className="rounded-xl bg-slate-50 p-3 text-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="font-semibold text-slate-900">{settings.custom_domain}</div>
+                        <div className="mt-1 text-slate-500">
+                          {effectiveDomainState.verified
+                            ? "DNS and HTTPS are ready."
+                            : "Keep the DNS records below in place, then verify again."}
+                        </div>
+                      </div>
+                      {effectiveDomainState.verified && (
+                        <a
+                          href={`https://${settings.custom_domain}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 font-semibold text-emerald-700"
+                        >
+                          Open domain <ExternalLink size={13}/>
+                        </a>
+                      )}
+                    </div>
+
+                    {(effectiveDomainState.verification?.length || 0) > 0 && (
+                      <div className="mt-4">
+                        <div className="font-semibold text-slate-700">Ownership verification</div>
+                        <div className="mt-2 space-y-2">
+                          {effectiveDomainState.verification?.map((record, index)=>(
+                            <div key={`${record.type || "record"}-${index}`} className="rounded-lg border bg-white p-2.5">
+                              <div className="font-semibold">{record.type || "TXT"} · {record.domain || settings.custom_domain}</div>
+                              {record.value && <div className="mt-1 break-all font-mono text-[11px] text-slate-600">{record.value}</div>}
+                              {record.reason && <div className="mt-1 text-slate-500">{record.reason}</div>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {((effectiveDomainState.dns?.recommended_ipv4?.length || 0) > 0 ||
+                      (effectiveDomainState.dns?.recommended_cname?.length || 0) > 0) && (
+                      <div className="mt-4">
+                        <div className="font-semibold text-slate-700">Recommended DNS</div>
+                        <div className="mt-2 space-y-2">
+                          {effectiveDomainState.dns?.recommended_ipv4?.map((value)=>(
+                            <div key={`a-${value}`} className="grid grid-cols-[62px_70px_1fr] gap-2 rounded-lg border bg-white p-2.5">
+                              <span className="font-bold">A</span>
+                              <span className="font-mono text-[11px]">{effectiveDomainState.dns?.record_name || "@"}</span>
+                              <span className="break-all font-mono text-[11px]">{value}</span>
+                            </div>
+                          ))}
+                          {effectiveDomainState.dns?.recommended_cname?.map((value)=>(
+                            <div key={`cname-${value}`} className="grid grid-cols-[62px_70px_1fr] gap-2 rounded-lg border bg-white p-2.5">
+                              <span className="font-bold">CNAME</span>
+                              <span className="font-mono text-[11px]">{effectiveDomainState.dns?.record_name || "www"}</span>
+                              <span className="break-all font-mono text-[11px]">{value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {effectiveDomainState.error && (
+                      <div className="mt-3 rounded-lg bg-amber-50 p-2.5 text-amber-800">{effectiveDomainState.error}</div>
+                    )}
+                    {effectiveDomainState.warning && (
+                      <div className="mt-3 rounded-lg bg-amber-50 p-2.5 text-amber-800">{effectiveDomainState.warning}</div>
+                    )}
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button type="button" disabled={domainBusy} onClick={()=>void refreshDomain(false)} className="inline-flex items-center gap-1.5 rounded-lg border bg-white px-3 py-2 font-semibold disabled:opacity-50">
+                        <RefreshCw size={13}/>Refresh status
+                      </button>
+                      {!effectiveDomainState.verified && (
+                        <button type="button" disabled={domainBusy} onClick={()=>void refreshDomain(true)} className="inline-flex items-center gap-1.5 rounded-lg border bg-white px-3 py-2 font-semibold disabled:opacity-50">
+                          <Check size={13}/>Verify DNS
+                        </button>
+                      )}
+                      <button type="button" disabled={domainBusy} onClick={()=>void removeDomain()} className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-2 font-semibold text-red-700 disabled:opacity-50">
+                        <Trash2 size={13}/>Disconnect
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </section>
 
           <section className="rounded-2xl border bg-white p-5">

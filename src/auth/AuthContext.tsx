@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { User } from "@supabase/supabase-js";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import type { AppRole } from "@/clinic/types";
+import { getCustomDomainHostname, getPlatformHomeUrl } from "@/saas/publicRouting";
 import type { Clinic, ClinicEntitlements, ClinicMembership, ClinicRole, PlatformRole } from "@/saas/types";
 
 type AuthState = {
@@ -270,7 +271,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             last_name: last,
             phone: phone?.trim() || null,
           },
-          emailRedirectTo: `${window.location.origin}${clinicSlug ? `/c/${clinicSlug}/patient/complete-profile` : "/patient-portal/complete-profile"}`,
+          emailRedirectTo: `${getCustomDomainHostname() ? getPlatformHomeUrl() : window.location.origin}${clinicSlug ? `/c/${clinicSlug}/patient/complete-profile` : "/patient-portal/complete-profile"}`,
         },
       });
       if (error) throw error;

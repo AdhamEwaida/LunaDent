@@ -13,11 +13,13 @@ Apply the reviewed SQL files in this order on a fresh development project:
 7. `006_commercial_guards.sql`
 8. `007_clinical_workflows.sql`
 9. `008_booking_audit_professional.sql`
+10. `009_custom_domains.sql`
 
 Then deploy:
 
 - `../functions/manage-clinic-users` with JWT verification enabled.
 - `../functions/manage-saas` with JWT verification enabled.
+- `../functions/manage-clinic-domain` with JWT verification enabled.
 - `../functions/public-booking` with JWT verification disabled; it performs its own server-side clinic, schedule, rate-limit, doctor and treatment validation.
 - `../functions/claim-initial-admin` is intentionally closed and returns HTTP 410; bootstrap is not part of the product anymore.
 
@@ -81,7 +83,11 @@ Plan features are enforced in both the UI and PostgreSQL/RLS boundary. Accountin
 
 The platform currently uses `billing_provider = manual` until a payment processor is connected. Super Admin can change plan and subscription status without giving clinic users direct access to subscription records.
 
-Features that require external provisioning, including custom domains, public API access and multi-location operation, are intentionally disabled in active plan metadata until their infrastructure is connected.
+Custom domains are provider-backed through the authenticated `manage-clinic-domain` Edge Function. The database stores lifecycle state while Vercel remains authoritative for project-domain ownership, DNS readiness, and TLS provisioning. Starter does not include custom domains; Pro and Enterprise do.
+
+Before enabling this function in an environment, configure the Edge Function secret `VERCEL_TOKEN` with a Vercel token scoped to the LunaDent project/team. The function also accepts optional `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID`, and `LUNADENT_PLATFORM_DOMAIN` overrides. Never expose `VERCEL_TOKEN` to Vite/frontend environment variables.
+
+Public API access and multi-location operation remain disabled until their own provisioning infrastructure is connected.
 
 ## Booking
 

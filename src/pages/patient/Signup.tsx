@@ -1,36 +1,19 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { CheckCircle2, LockKeyhole, Mail, Phone, UserRound } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 import { clinicRepository } from "@/clinic/repository";
-import { saasRepository } from "@/saas/repository";
-import type { PublicClinicSite } from "@/saas/types";
+import { clinicPublicHref, usePublicClinicSite } from "@/saas/publicRouting";
 
 
 function useClinicSignupContext() {
-  const { clinicSlug = "" } = useParams();
-  const [site, setSite] = useState<PublicClinicSite | null>(null);
-  const [loadingClinic, setLoadingClinic] = useState(Boolean(clinicSlug));
-  const [clinicError, setClinicError] = useState("");
-
-  useEffect(() => {
-    if (!clinicSlug) {
-      setLoadingClinic(false);
-      return;
-    }
-    let active = true;
-    void saasRepository.getClinicSiteBySlug(clinicSlug)
-      .then((row) => {
-        if (!active) return;
-        setSite(row);
-        if (!row) setClinicError("Clinic website is unavailable.");
-      })
-      .catch((err) => active && setClinicError(err instanceof Error ? err.message : "Unable to load clinic."))
-      .finally(() => active && setLoadingClinic(false));
-    return () => { active = false; };
-  }, [clinicSlug]);
-
-  return { clinicSlug, site, loadingClinic, clinicError };
+  const { clinicSlug, site, loading, error } = usePublicClinicSite();
+  return {
+    clinicSlug,
+    site,
+    loadingClinic: loading,
+    clinicError: error,
+  };
 }
 
 export function PatientSignup() {
@@ -49,6 +32,8 @@ export function PatientSignup() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
+  if (loadingClinic) return <div className="min-h-screen grid place-items-center bg-slate-50 text-slate-500">Loading clinic...</div>;
+
   if (!clinicSlug) {
     return (
       <div className="min-h-screen grid place-items-center px-4 bg-slate-50">
@@ -61,13 +46,11 @@ export function PatientSignup() {
       </div>
     );
   }
-
-  if (loadingClinic) return <div className="min-h-screen grid place-items-center bg-slate-50 text-slate-500">Loading clinic...</div>;
   if (!site) return <div className="min-h-screen grid place-items-center bg-slate-50 px-4"><div className="text-center"><h1 className="text-xl font-bold">Clinic unavailable</h1><p className="text-sm text-slate-500 mt-2">{clinicError}</p></div></div>;
 
   if (user && isSuperAdmin) return <Navigate to="/super-admin" replace />;
   if (user && role && role !== "patient") return <Navigate to="/admin" replace />;
-  if (user && role === "patient") return <Navigate to={`/c/${clinicSlug}/patient/complete-profile`} replace />;
+  if (user && role === "patient") return <Navigate to={clinicPublicHref(site, "/patient/complete-profile")} replace />;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -93,7 +76,7 @@ export function PatientSignup() {
       if (result.needsEmailConfirmation) {
         setMessage(`Account created for ${site.clinic.name}. Check your email and confirm your address, then continue your patient profile.`);
       } else {
-        navigate(`/c/${clinicSlug}/patient/complete-profile`, { replace: true });
+        navigate(clinicPublicHref(site, "/patient/complete-profile"), { replace: true });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to create your patient account.");
@@ -169,13 +152,13 @@ export function PatientSignup() {
 
           <div className="mt-5 pt-5 border-t text-center">
             <p className="text-xs mb-2 text-slate-500">Already have an account?</p>
-            <Link to={`/c/${clinicSlug}/patient/login`} className="text-sm font-semibold" style={{ color: site.settings.tokens?.colors?.primary || "#2457C5" }}>
+            <Link to={clinicPublicHref(site, "/patient/login")} className="text-sm font-semibold" style={{ color: site.settings.tokens?.colors?.primary || "#2457C5" }}>
               Sign In to Patient Portal
             </Link>
           </div>
         </form>
 
-        <Link to={`/c/${clinicSlug}`} className="block text-center text-xs mt-4 text-slate-500">Back to {site.clinic.name}</Link>
+        <Link to={clinicPublicHref(site)} className="block text-center text-xs mt-4 text-slate-500">Back to {site.clinic.name}</Link>
       </div>
     </div>
   );
@@ -214,7 +197,7 @@ export function CompletePatientProfile() {
     void clinicRepository.getPatientByAuthUserId(user.id, site.clinic.id)
       .then((patient) => {
         if (!active) return;
-        if (patient) navigate(`/c/${clinicSlug}/patient`, { replace: true });
+        if (patient) navigate(clinicPublicHref(site, "/patient"), { replace: true });
       })
       .catch((err) => active && setError(err instanceof Error ? err.message : "Unable to check your patient profile."))
       .finally(() => active && setChecking(false));
@@ -222,8 +205,8 @@ export function CompletePatientProfile() {
     return () => { active = false; };
   }, [clinicSlug, site, user, role, navigate]);
 
-  if (!clinicSlug) return <Navigate to="/" replace />;
   if (loadingClinic || authLoading || checking) return <div className="min-h-screen grid place-items-center bg-slate-50 text-slate-500">Preparing patient profile...</div>;
+  if (!clinicSlug) return <Navigate to="/" replace />;
   if (!site) return <div className="min-h-screen grid place-items-center bg-slate-50 text-slate-500">{clinicError || "Clinic unavailable."}</div>;
 
   if (!user) {
@@ -233,7 +216,7 @@ export function CompletePatientProfile() {
           <Mail size={34} className="mx-auto mb-3" />
           <h1 className="text-2xl font-bold">Confirm your email first</h1>
           <p className="text-sm mt-2 mb-6 text-slate-600">After confirming your email, sign in to finish creating your profile for {site.clinic.name}.</p>
-          <Link to={`/c/${clinicSlug}/patient/login`} className="block py-3 rounded-xl font-semibold text-sm text-white"
+          <Link to={clinicPublicHref(site, "/patient/login")} className="block py-3 rounded-xl font-semibold text-sm text-white"
             style={{ background: site.settings.tokens?.colors?.primary || "#2457C5" }}>Go to Patient Sign In</Link>
         </div>
       </div>
@@ -253,7 +236,7 @@ export function CompletePatientProfile() {
         ...form,
         email: user.email || "",
       });
-      navigate(`/c/${clinicSlug}/patient`, { replace: true });
+      navigate(clinicPublicHref(site, "/patient"), { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to create your patient profile.");
     } finally {

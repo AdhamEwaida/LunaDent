@@ -1,9 +1,9 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { CalendarDays, CreditCard, FileText, Home, LogOut, ReceiptText, ShieldCheck, Stethoscope, UserRound } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 import { clinicRepository } from "@/clinic/repository";
-import { saasRepository } from "@/saas/repository";
+import { clinicPublicHref, usePublicClinicSite } from "@/saas/publicRouting";
 import type { Appointment, Invoice, Patient, PatientDocument, Payment, TreatmentPlan } from "@/clinic/types";
 import type { PublicClinicSite } from "@/saas/types";
 
@@ -20,7 +20,6 @@ function money(value: number, currency = "USD") {
 
 function PatientLogin({ site }: { site: PublicClinicSite }) {
   const { user, signIn, signOut, isSuperAdmin, activeClinicRole } = useAuth();
-  const { clinicSlug = "" } = useParams();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -28,8 +27,8 @@ function PatientLogin({ site }: { site: PublicClinicSite }) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (user) navigate(`/c/${clinicSlug}/patient`, { replace: true });
-  }, [user, clinicSlug, navigate]);
+    if (user) navigate(clinicPublicHref(site, "/patient"), { replace: true });
+  }, [user, site, navigate]);
 
   if (user) {
     return (
@@ -38,7 +37,7 @@ function PatientLogin({ site }: { site: PublicClinicSite }) {
           <ShieldCheck size={34} className="mx-auto mb-3" />
           <h1 className="text-2xl font-bold">Already signed in</h1>
           <p className="text-sm mt-2 mb-6 text-slate-600">Continue to your patient record for {site.clinic.name}.</p>
-          <Link to={`/c/${clinicSlug}/patient`} className="block w-full py-3 rounded-xl text-sm font-semibold text-white"
+          <Link to={clinicPublicHref(site, "/patient")} className="block w-full py-3 rounded-xl text-sm font-semibold text-white"
             style={{ background: site.settings.tokens?.colors?.primary || "#2457C5" }}>
             Open Patient Portal
           </Link>
@@ -90,7 +89,7 @@ function PatientLogin({ site }: { site: PublicClinicSite }) {
           <div className="flex items-center justify-between gap-3">
             <label className="text-xs font-semibold">Password</label>
             <Link
-              to={`/auth/reset-password?next=${encodeURIComponent(`/c/${clinicSlug}/patient/login`)}`}
+              to={`/auth/reset-password?next=${encodeURIComponent(`/c/${site.clinic.slug}/patient/login`)}`}
               className="text-xs font-semibold"
               style={{ color: site.settings.tokens?.colors?.primary || "#2457C5" }}
             >
@@ -105,13 +104,13 @@ function PatientLogin({ site }: { site: PublicClinicSite }) {
           </button>
           <div className="mt-5 pt-5 border-t text-center">
             <p className="text-xs mb-2 text-slate-500">New patient?</p>
-            <Link to={`/c/${clinicSlug}/patient/signup`} className="text-sm font-semibold"
+            <Link to={clinicPublicHref(site, "/patient/signup")} className="text-sm font-semibold"
               style={{ color: site.settings.tokens?.colors?.primary || "#2457C5" }}>
               Create Patient Account
             </Link>
           </div>
         </form>
-        <Link to={`/c/${clinicSlug}`} className="block text-center text-xs mt-4 text-slate-500">Back to clinic website</Link>
+        <Link to={clinicPublicHref(site)} className="block text-center text-xs mt-4 text-slate-500">Back to clinic website</Link>
       </div>
     </div>
   );
@@ -119,10 +118,9 @@ function PatientLogin({ site }: { site: PublicClinicSite }) {
 
 export default function PatientPortalLive() {
   const { user, loading: authLoading, signOut } = useAuth();
-  const { clinicSlug = "" } = useParams();
+  const { site, loading: clinicLoading, error: clinicLoadError, clinicSlug } = usePublicClinicSite();
   const location = useLocation();
   const navigate = useNavigate();
-  const [site, setSite] = useState<PublicClinicSite | null>(null);
   const [patient, setPatient] = useState<Patient | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [plans, setPlans] = useState<TreatmentPlan[]>([]);
@@ -133,44 +131,44 @@ export default function PatientPortalLive() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!clinicSlug) {
+    if (clinicLoadError) setError(clinicLoadError);
+    if (clinicLoading) return;
+    if (!site || !user) {
       setLoading(false);
       return;
     }
 
     let active = true;
-    void saasRepository.getClinicSiteBySlug(clinicSlug)
-      .then((siteRow) => {
+    setLoading(true);
+    setError("");
+
+    void clinicRepository.getPatientByAuthUserId(user.id, site.clinic.id)
+      .then(async (patientRow) => {
         if (!active) return;
-        setSite(siteRow);
-        if (!siteRow || !user) return;
+        setPatient(patientRow);
+        if (!patientRow) return;
 
-        return clinicRepository.getPatientByAuthUserId(user.id, siteRow.clinic.id)
-          .then(async (patientRow) => {
-            if (!active) return;
-            setPatient(patientRow);
-            if (!patientRow) return;
-
-            const [appointmentRows, planRows, invoiceRows, paymentRows, documentRows] = await Promise.all([
-              clinicRepository.listAppointments(patientRow.id, siteRow.clinic.id),
-              clinicRepository.listTreatmentPlans(patientRow.id, siteRow.clinic.id),
-              clinicRepository.listInvoices(patientRow.id, siteRow.clinic.id),
-              clinicRepository.listPayments(patientRow.id, siteRow.clinic.id),
-              clinicRepository.listPatientDocuments(patientRow.id, siteRow.clinic.id),
-            ]);
-            if (!active) return;
-            setAppointments(appointmentRows);
-            setPlans(planRows);
-            setInvoices(invoiceRows);
-            setPayments(paymentRows);
-            setDocuments(documentRows);
-          });
+        const [appointmentRows, planRows, invoiceRows, paymentRows, documentRows] = await Promise.all([
+          clinicRepository.listAppointments(patientRow.id, site.clinic.id),
+          clinicRepository.listTreatmentPlans(patientRow.id, site.clinic.id),
+          clinicRepository.listInvoices(patientRow.id, site.clinic.id),
+          clinicRepository.listPayments(patientRow.id, site.clinic.id),
+          clinicRepository.listPatientDocuments(patientRow.id, site.clinic.id),
+        ]);
+        if (!active) return;
+        setAppointments(appointmentRows);
+        setPlans(planRows);
+        setInvoices(invoiceRows);
+        setPayments(paymentRows);
+        setDocuments(documentRows);
       })
       .catch((err) => active && setError(err instanceof Error ? err.message : "Unable to load your portal."))
       .finally(() => active && setLoading(false));
 
     return () => { active = false; };
-  }, [clinicSlug, user]);
+  }, [clinicLoading, clinicLoadError, site, user]);
+
+  if (authLoading || clinicLoading || loading) return <div className="min-h-screen grid place-items-center bg-slate-50 text-slate-500">Loading patient portal...</div>;
 
   if (!clinicSlug) {
     return (
@@ -180,10 +178,9 @@ export default function PatientPortalLive() {
     );
   }
 
-  if (authLoading || loading) return <div className="min-h-screen grid place-items-center bg-slate-50 text-slate-500">Loading patient portal...</div>;
   if (!site) return <div className="min-h-screen grid place-items-center bg-slate-50 text-slate-500">Clinic portal unavailable.</div>;
 
-  const base = `/c/${clinicSlug}/patient`;
+  const base = clinicPublicHref(site, "/patient");
   if (location.pathname === `${base}/login` || !user) return <PatientLogin site={site} />;
 
   if (!patient) {
@@ -193,7 +190,7 @@ export default function PatientPortalLive() {
           <UserRound size={34} className="mx-auto mb-3" />
           <h1 className="text-xl font-bold">Finish your patient profile</h1>
           <p className="text-sm mt-2 text-slate-600">Your account is signed in, but it does not have a patient record at {site.clinic.name} yet.</p>
-          <Link to={`/c/${clinicSlug}/patient/complete-profile`} className="inline-block mt-5 px-5 py-3 rounded-xl text-sm font-semibold text-white"
+          <Link to={clinicPublicHref(site, "/patient/complete-profile")} className="inline-block mt-5 px-5 py-3 rounded-xl text-sm font-semibold text-white"
             style={{ background:site.settings.tokens?.colors?.primary || "#2457C5" }}>
             Complete Patient Profile
           </Link>
@@ -253,10 +250,10 @@ export default function PatientPortalLive() {
     <div className="min-h-screen bg-slate-50">
       <header className="h-16 border-b bg-white">
         <div className="max-w-6xl mx-auto h-full px-5 flex items-center justify-between">
-          <Link to={`/c/${clinicSlug}`} className="font-bold">{site.clinic.name}</Link>
+          <Link to={clinicPublicHref(site)} className="font-bold">{site.clinic.name}</Link>
           <div className="flex items-center gap-3">
             <span className="hidden sm:block text-xs text-slate-500">{user?.email}</span>
-            <button onClick={()=>void signOut().then(()=>navigate(`/c/${clinicSlug}/patient/login`))} className="p-2 rounded-lg border" aria-label="Sign out"><LogOut size={15}/></button>
+            <button onClick={()=>void signOut().then(()=>navigate(clinicPublicHref(site, "/patient/login")))} className="p-2 rounded-lg border" aria-label="Sign out"><LogOut size={15}/></button>
           </div>
         </div>
       </header>
