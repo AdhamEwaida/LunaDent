@@ -40,6 +40,7 @@ Deno.test("Edge sources retain required security guards", async () => {
   assert(clinicDomain.includes("/v10/projects/"));
   assert(clinicDomain.includes("domain_verified"));
 
+  assert(selfServeSignup.includes("@supabase/supabase-js@2.117.2/cors"));
   assert(selfServeSignup.includes("email_confirm: true"));
   assert(selfServeSignup.includes("demo_checkout_acknowledged"));
   assert(selfServeSignup.includes("saas_signup_attempts"));
