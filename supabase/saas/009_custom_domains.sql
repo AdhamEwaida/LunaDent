@@ -68,7 +68,14 @@ security invoker
 set search_path=''
 as $$
 begin
-  if current_user in ('postgres','service_role','supabase_admin') or private.is_platform_super_admin() then
+  if current_user in ('postgres','service_role','supabase_admin') then
+    if new.custom_domain is not null then
+      new.custom_domain := nullif(lower(trim(new.custom_domain)), '');
+    end if;
+    return new;
+  end if;
+
+  if private.is_platform_super_admin() then
     if new.custom_domain is not null then
       new.custom_domain := nullif(lower(trim(new.custom_domain)), '');
     end if;
