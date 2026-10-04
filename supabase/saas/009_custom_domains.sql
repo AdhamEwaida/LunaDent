@@ -75,23 +75,38 @@ begin
     return new;
   end if;
 
-  if new.theme_key is distinct from old.theme_key
-     and new.theme_key<>'modern'
+  if new.theme_key<>'modern'
+     and (tg_op='INSERT' or new.theme_key is distinct from old.theme_key)
      and not private.clinic_feature_enabled(new.clinic_id,'all_themes') then
     raise exception 'Your clinic plan does not include all website themes';
   end if;
 
-  if new.custom_domain is distinct from old.custom_domain then
-    raise exception 'Custom domains are managed through the LunaDent domain connection flow';
-  end if;
+  if tg_op='INSERT' then
+    if new.custom_domain is not null then
+      raise exception 'Custom domains are managed through the LunaDent domain connection flow';
+    end if;
 
-  if new.domain_verified is distinct from old.domain_verified
-     or new.domain_status is distinct from old.domain_status
-     or new.domain_requested_at is distinct from old.domain_requested_at
-     or new.domain_verified_at is distinct from old.domain_verified_at
-     or new.domain_last_checked_at is distinct from old.domain_last_checked_at
-     or new.domain_error is distinct from old.domain_error then
-    raise exception 'Custom domain verification state is managed by the LunaDent platform';
+    if new.domain_verified
+       or new.domain_status<>'not_configured'
+       or new.domain_requested_at is not null
+       or new.domain_verified_at is not null
+       or new.domain_last_checked_at is not null
+       or new.domain_error is not null then
+      raise exception 'Custom domain verification state is managed by the LunaDent platform';
+    end if;
+  else
+    if new.custom_domain is distinct from old.custom_domain then
+      raise exception 'Custom domains are managed through the LunaDent domain connection flow';
+    end if;
+
+    if new.domain_verified is distinct from old.domain_verified
+       or new.domain_status is distinct from old.domain_status
+       or new.domain_requested_at is distinct from old.domain_requested_at
+       or new.domain_verified_at is distinct from old.domain_verified_at
+       or new.domain_last_checked_at is distinct from old.domain_last_checked_at
+       or new.domain_error is distinct from old.domain_error then
+      raise exception 'Custom domain verification state is managed by the LunaDent platform';
+    end if;
   end if;
 
   return new;
@@ -99,6 +114,11 @@ end;
 $$;
 
 revoke all on function private.protect_site_entitlements() from public,anon,authenticated;
+
+drop trigger if exists clinic_site_settings_protect_entitlements on public.clinic_site_settings;
+create trigger clinic_site_settings_protect_entitlements
+before insert or update on public.clinic_site_settings
+for each row execute function private.protect_site_entitlements();
 
 -- Custom domains are a paid website capability now that provider-backed provisioning is implemented.
 update public.plans
