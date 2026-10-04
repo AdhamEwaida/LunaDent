@@ -1,10 +1,9 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
+import { corsHeaders } from "npm:@supabase/supabase-js@2.117.2/cors";
 
 const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  ...corsHeaders,
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
