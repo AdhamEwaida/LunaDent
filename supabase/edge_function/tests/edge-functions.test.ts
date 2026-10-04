@@ -43,8 +43,7 @@ Deno.test("Edge sources retain required security guards", async () => {
   assert(selfServeSignup.includes("email_confirm: true"));
   assert(selfServeSignup.includes("demo_checkout_acknowledged"));
   assert(selfServeSignup.includes("saas_signup_attempts"));
-  assert(selfServeSignup.includes("VERCEL_TOKEN"));
-  assert(selfServeSignup.includes("/v10/projects/"));
+  assert(selfServeSignup.includes("saas_managed_domains"));
   assert(selfServeSignup.includes("provision_self_serve_clinic"));
   assert(selfServeSignup.includes("terms_accepted"));
 });

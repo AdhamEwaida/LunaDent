@@ -374,12 +374,12 @@ export type Database = {
           domain_status: string
           domain_verified: boolean
           domain_verified_at: string | null
-          platform_subdomain: string | null
-          platform_subdomain_created_at: string | null
           favicon_url: string | null
           hero_image_url: string | null
           logo_url: string | null
           navigation: Json
+          platform_subdomain: string | null
+          platform_subdomain_created_at: string | null
           published: boolean
           sections: Json
           site_title: string | null
@@ -400,12 +400,12 @@ export type Database = {
           domain_status?: string
           domain_verified?: boolean
           domain_verified_at?: string | null
-          platform_subdomain?: string | null
-          platform_subdomain_created_at?: string | null
           favicon_url?: string | null
           hero_image_url?: string | null
           logo_url?: string | null
           navigation?: Json
+          platform_subdomain?: string | null
+          platform_subdomain_created_at?: string | null
           published?: boolean
           sections?: Json
           site_title?: string | null
@@ -426,12 +426,12 @@ export type Database = {
           domain_status?: string
           domain_verified?: boolean
           domain_verified_at?: string | null
-          platform_subdomain?: string | null
-          platform_subdomain_created_at?: string | null
           favicon_url?: string | null
           hero_image_url?: string | null
           logo_url?: string | null
           navigation?: Json
+          platform_subdomain?: string | null
+          platform_subdomain_created_at?: string | null
           published?: boolean
           sections?: Json
           site_title?: string | null
@@ -1388,30 +1388,6 @@ export type Database = {
           },
         ]
       }
-      saas_signup_attempts: {
-        Row: {
-          created_at: string
-          email_hash: string
-          id: number
-          ip_hash: string
-          outcome: string
-        }
-        Insert: {
-          created_at?: string
-          email_hash: string
-          id?: never
-          ip_hash: string
-          outcome?: string
-        }
-        Update: {
-          created_at?: string
-          email_hash?: string
-          id?: never
-          ip_hash?: string
-          outcome?: string
-        }
-        Relationships: []
-      }
       saas_leads: {
         Row: {
           clinic_name: string | null
@@ -1445,6 +1421,62 @@ export type Database = {
           phone?: string | null
           status?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      saas_managed_domains: {
+        Row: {
+          active: boolean
+          assigned_at: string | null
+          clinic_id: string | null
+          created_at: string
+          hostname: string
+        }
+        Insert: {
+          active?: boolean
+          assigned_at?: string | null
+          clinic_id?: string | null
+          created_at?: string
+          hostname: string
+        }
+        Update: {
+          active?: boolean
+          assigned_at?: string | null
+          clinic_id?: string | null
+          created_at?: string
+          hostname?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saas_managed_domains_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: true
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saas_signup_attempts: {
+        Row: {
+          created_at: string
+          email_hash: string
+          id: number
+          ip_hash: string
+          outcome: string
+        }
+        Insert: {
+          created_at?: string
+          email_hash: string
+          id?: never
+          ip_hash: string
+          outcome?: string
+        }
+        Update: {
+          created_at?: string
+          email_hash?: string
+          id?: never
+          ip_hash?: string
+          outcome?: string
         }
         Relationships: []
       }
@@ -1750,26 +1782,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      provision_self_serve_clinic: {
-        Args: {
-          p_currency?: string
-          p_clinic_name: string
-          p_owner_name: string
-          p_plan_code: string
-          p_platform_subdomain?: string
-          p_slug: string
-          p_theme_key: string
-          p_timezone?: string
-          p_user_id: string
-        }
-        Returns: {
-          clinic_id: string
-          clinic_slug: string
-          plan_code: string
-          platform_subdomain: string
-          theme_key: string
-        }[]
-      }
       convert_booking_request: {
         Args: { p_booking_request_id: string }
         Returns: Json
@@ -1795,6 +1807,26 @@ export type Database = {
           p_patient_id: string
         }
         Returns: string
+      }
+      provision_self_serve_clinic: {
+        Args: {
+          p_clinic_name: string
+          p_currency?: string
+          p_owner_name: string
+          p_plan_code: string
+          p_platform_subdomain?: string
+          p_slug: string
+          p_theme_key: string
+          p_timezone?: string
+          p_user_id: string
+        }
+        Returns: {
+          clinic_id: string
+          clinic_slug: string
+          plan_code: string
+          platform_subdomain: string
+          theme_key: string
+        }[]
       }
       record_inventory_transaction: {
         Args: {

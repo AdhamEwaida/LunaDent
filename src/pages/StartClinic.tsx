@@ -85,7 +85,7 @@ export default function StartClinic() {
   };
 
   const clinicSlug = slugify(form.clinic_name) || "your-clinic";
-  const expectedUrl = `clinic-${clinicSlug}-lunadent.vercel.app`;
+  const expectedUrl = "clinic-###-lunadent.vercel.app";
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -254,7 +254,7 @@ export default function StartClinic() {
                 <div className="flex items-center gap-2 font-bold"><Globe2 size={17} /> Your included clinic URL</div>
                 <div className="mt-2 break-all font-mono text-xs text-slate-700">{expectedUrl}</div>
                 <div className="mt-2 text-xs leading-5 text-slate-500">
-                  LunaDent reserves an available <b>vercel.app</b> address automatically. If the first name is taken, a short suffix is added.
+                  LunaDent reserves the next available verified <b>vercel.app</b> clinic address automatically. Your clinic name still uses the readable path <b>{clinicSlug}</b> inside the platform.
                 </div>
               </div>
 

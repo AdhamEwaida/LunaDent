@@ -86,9 +86,9 @@ The platform currently uses `billing_provider = manual` until a payment processo
 
 Custom domains are provider-backed through the authenticated `manage-clinic-domain` Edge Function. The database stores lifecycle state while Vercel remains authoritative for project-domain ownership, DNS readiness, and TLS provisioning. Starter does not include custom domains; Pro and Enterprise do.
 
-Before enabling domain provisioning in an environment, configure the Edge Function secret `VERCEL_TOKEN` with a Vercel token scoped to the LunaDent project/team. The same secret is used by `manage-clinic-domain` and `self-serve-signup`. The functions also accept optional `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID`, and `LUNADENT_PLATFORM_DOMAIN` overrides. Never expose `VERCEL_TOKEN` to Vite/frontend environment variables.
+Custom-domain provisioning still requires the Edge Function secret `VERCEL_TOKEN` for `manage-clinic-domain`. The self-serve clinic signup flow does not require that secret: LunaDent allocates from a small pool of verified `vercel.app` project domains that are pre-attached to the Vercel project. Never expose `VERCEL_TOKEN` to Vite/frontend environment variables.
 
-Self-serve checkout is intentionally a prototype: it creates an active 30-day subscription with `billing_provider = 'demo'` and does not charge a card. Replace this lifecycle with a real payment provider before representing billing as automated production billing. Each self-serve clinic receives a Vercel-managed project domain shaped like `clinic-<slug>-lunadent.vercel.app`; because it is attached as a project domain rather than a deployment-only alias, it follows future production deployments automatically.
+Self-serve checkout is intentionally a prototype: it creates an active 30-day subscription with `billing_provider = 'demo'` and does not charge a card. Replace this lifecycle with a real payment provider before representing billing as automated production billing. Each self-serve clinic receives the next available pre-provisioned Vercel project domain such as `clinic-001-lunadent.vercel.app`; project domains follow future production deployments automatically.
 
 Public API access and multi-location operation remain disabled until their own provisioning infrastructure is connected.
 

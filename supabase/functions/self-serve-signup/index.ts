@@ -8,11 +8,6 @@ const cors = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const PROJECT_ID = Deno.env.get("VERCEL_PROJECT_ID") ||
-  "prj_qDKByUvOPDnEsAAYBuyHEydmZDXP";
-const TEAM_ID = Deno.env.get("VERCEL_TEAM_ID") ||
-  "team_8olXV56k0qrxvRAEz0Xtt8dM";
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Service-role client intentionally spans the complete tenant schema.
 type AdminClient = ReturnType<typeof createClient<any>>;
 
@@ -63,115 +58,6 @@ function requestIp(req: Request) {
   );
 }
 
-function vercelUrl(path: string) {
-  const url = new URL(`https://api.vercel.com${path}`);
-  if (TEAM_ID) url.searchParams.set("teamId", TEAM_ID);
-  return url.toString();
-}
-
-async function vercelRequest<T>(
-  path: string,
-  init: RequestInit = {},
-): Promise<T> {
-  const token = Deno.env.get("VERCEL_TOKEN")?.trim();
-  if (!token) {
-    throw new HttpError("Clinic URL provisioning is not configured yet.", 503);
-  }
-
-  const response = await fetch(vercelUrl(path), {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      ...(init.headers || {}),
-    },
-  });
-
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) {
-    const apiMessage = typeof payload === "object" && payload !== null
-      ? String(
-        (payload as { error?: { message?: string }; message?: string }).error
-          ?.message ||
-          (payload as { message?: string }).message ||
-          "",
-      )
-      : "";
-    const code = typeof payload === "object" && payload !== null
-      ? String((payload as { error?: { code?: string } }).error?.code || "")
-      : "";
-    const error = new HttpError(
-      apiMessage || "Vercel could not provision the clinic URL.",
-      response.status,
-    );
-    (error as HttpError & { code?: string }).code = code;
-    throw error;
-  }
-
-  return payload as T;
-}
-
-async function addManagedDomain(domain: string) {
-  return await vercelRequest<{ name: string; verified?: boolean }>(
-    `/v10/projects/${encodeURIComponent(PROJECT_ID)}/domains`,
-    {
-      method: "POST",
-      body: JSON.stringify({ name: domain }),
-    },
-  );
-}
-
-async function removeManagedDomain(domain: string) {
-  try {
-    await vercelRequest(
-      `/v9/projects/${encodeURIComponent(PROJECT_ID)}/domains/${
-        encodeURIComponent(domain)
-      }`,
-      { method: "DELETE" },
-    );
-  } catch (error) {
-    if (error instanceof HttpError && error.status === 404) return;
-    throw error;
-  }
-}
-
-async function reserveManagedDomain(
-  admin: AdminClient,
-  clinicSlug: string,
-) {
-  const candidates = [
-    `clinic-${clinicSlug}-lunadent.vercel.app`,
-    `clinic-${clinicSlug}-${randomSuffix()}-lunadent.vercel.app`,
-    `clinic-${clinicSlug}-${randomSuffix()}-lunadent.vercel.app`,
-  ];
-
-  for (const domain of candidates) {
-    const { data: used, error: lookupError } = await admin
-      .from("clinic_site_settings")
-      .select("clinic_id")
-      .eq("platform_subdomain", domain)
-      .maybeSingle();
-    if (lookupError) throw lookupError;
-    if (used) continue;
-
-    try {
-      const created = await addManagedDomain(domain);
-      if (created.name) return created.name.toLowerCase();
-    } catch (error) {
-      if (
-        error instanceof HttpError &&
-        [400, 409].includes(error.status) &&
-        /already|in use|alias/i.test(error.message)
-      ) {
-        continue;
-      }
-      throw error;
-    }
-  }
-
-  throw new HttpError("Unable to reserve a clinic URL. Please try again.", 409);
-}
-
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") {
@@ -184,20 +70,12 @@ Deno.serve(async (req: Request) => {
   let admin: AdminClient | null = null;
   let attemptId: number | null = null;
   let createdUserId: string | null = null;
-  let managedDomain: string | null = null;
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const hashSalt = Deno.env.get("SIGNUP_HASH_SALT") || supabaseUrl;
-
-    if (!Deno.env.get("VERCEL_TOKEN")?.trim()) {
-      throw new HttpError(
-        "Clinic URL provisioning is not configured yet.",
-        503,
-      );
-    }
 
     admin = createClient(supabaseUrl, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
@@ -305,6 +183,19 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    const { count: availableDomains, error: domainPoolError } = await admin
+      .from("saas_managed_domains")
+      .select("hostname", { count: "exact", head: true })
+      .eq("active", true)
+      .is("clinic_id", null);
+    if (domainPoolError) throw domainPoolError;
+    if (!availableDomains) {
+      throw new HttpError(
+        "Clinic URL capacity is temporarily full. Please try again shortly.",
+        503,
+      );
+    }
+
     const baseSlug = slugify(clinicName) || "clinic";
     let clinicSlug = baseSlug;
     for (let attemptNo = 0; attemptNo < 4; attemptNo += 1) {
@@ -352,8 +243,6 @@ Deno.serve(async (req: Request) => {
       throw new HttpError("Unable to start the clinic owner session.", 500);
     }
 
-    managedDomain = await reserveManagedDomain(admin, clinicSlug);
-
     const { data: provisioned, error: provisionError } = await admin.rpc(
       "provision_self_serve_clinic",
       {
@@ -363,29 +252,36 @@ Deno.serve(async (req: Request) => {
         p_slug: clinicSlug,
         p_plan_code: planCode,
         p_theme_key: themeKey,
-        p_platform_subdomain: managedDomain,
+        p_platform_subdomain: null,
         p_timezone: timezone,
         p_currency: currency,
       },
     );
     if (provisionError) throw provisionError;
 
+    const row = Array.isArray(provisioned) ? provisioned[0] : provisioned;
+    if (!row?.clinic_id || !row?.platform_subdomain) {
+      throw new HttpError(
+        "Clinic provisioning did not return a complete tenant.",
+        500,
+      );
+    }
+
     if (attemptId) {
       await admin.from("saas_signup_attempts").update({ outcome: "success" })
         .eq("id", attemptId);
     }
 
-    const row = Array.isArray(provisioned) ? provisioned[0] : provisioned;
     return Response.json({
       ok: true,
       clinic: {
-        id: row?.clinic_id,
-        slug: row?.clinic_slug || clinicSlug,
-        platform_subdomain: row?.platform_subdomain || managedDomain,
-        plan_code: row?.plan_code || planCode,
-        theme_key: row?.theme_key || themeKey,
+        id: row.clinic_id,
+        slug: row.clinic_slug || clinicSlug,
+        platform_subdomain: row.platform_subdomain,
+        plan_code: row.plan_code || planCode,
+        theme_key: row.theme_key || themeKey,
       },
-      site_url: `https://${managedDomain}`,
+      site_url: `https://${row.platform_subdomain}`,
       session: {
         access_token: signedIn.session.access_token,
         refresh_token: signedIn.session.refresh_token,
@@ -398,10 +294,6 @@ Deno.serve(async (req: Request) => {
           ? "rejected"
           : "failed",
       }).eq("id", attemptId);
-    }
-
-    if (admin && managedDomain) {
-      await removeManagedDomain(managedDomain).catch(() => undefined);
     }
 
     if (admin && createdUserId) {
