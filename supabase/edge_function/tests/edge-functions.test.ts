@@ -16,6 +16,9 @@ Deno.test("Edge sources retain required security guards", async () => {
   const clinicDomain = await Deno.readTextFile(
     "../functions/manage-clinic-domain/index.ts",
   );
+  const selfServeSignup = await Deno.readTextFile(
+    "../functions/self-serve-signup/index.ts",
+  );
 
   assert(clinicUsers.includes('authHeader?.startsWith("Bearer ")'));
   assert(clinicUsers.includes('platform_role === "super_admin"'));
@@ -36,6 +39,14 @@ Deno.test("Edge sources retain required security guards", async () => {
   assert(clinicDomain.includes("VERCEL_TOKEN"));
   assert(clinicDomain.includes("/v10/projects/"));
   assert(clinicDomain.includes("domain_verified"));
+
+  assert(selfServeSignup.includes("email_confirm: true"));
+  assert(selfServeSignup.includes("demo_checkout_acknowledged"));
+  assert(selfServeSignup.includes("saas_signup_attempts"));
+  assert(selfServeSignup.includes("VERCEL_TOKEN"));
+  assert(selfServeSignup.includes("/v10/projects/"));
+  assert(selfServeSignup.includes("provision_self_serve_clinic"));
+  assert(selfServeSignup.includes("terms_accepted"));
 });
 
 Deno.test({

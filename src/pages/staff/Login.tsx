@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { LockKeyhole, Mail, ShieldCheck, Stethoscope } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
+import { getPlatformHomeUrl } from "@/saas/publicRouting";
 
 export default function StaffLogin() {
   const { user, role, isSuperAdmin, mustChangePassword, signIn, signOut } = useAuth();
@@ -69,10 +70,10 @@ export default function StaffLogin() {
             <Stethoscope size={24} />
           </div>
           <h1 className="text-3xl font-bold" style={{ color: "var(--primary)", fontFamily: "'Cormorant Garamond', serif" }}>
-            Staff Sign In
+            Clinic Owner & Staff Sign In
           </h1>
           <p className="text-sm mt-2" style={{ color: "var(--muted-foreground)" }}>
-            For LunaDent employees only. Staff accounts are created by the clinic administrator.
+            Clinic owners and staff use this secure workspace. New clinic owners can create their clinic from the LunaDent website.
           </p>
         </div>
 
@@ -124,9 +125,11 @@ export default function StaffLogin() {
           </div>
         </form>
 
-        <Link to="/" className="block text-center text-xs mt-4" style={{ color: "var(--muted-foreground)" }}>
-          Back to LunaDent website
-        </Link>
+        <div className="mt-4 flex items-center justify-center gap-3 text-xs" style={{ color: "var(--muted-foreground)" }}>
+          <a href={getPlatformHomeUrl()}>Back to LunaDent</a>
+          <span>·</span>
+          <a href={`${getPlatformHomeUrl()}/start`} className="font-semibold" style={{ color: "var(--accent)" }}>Create a clinic</a>
+        </div>
       </div>
     </div>
   );

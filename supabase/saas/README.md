@@ -20,6 +20,7 @@ Then deploy:
 - `../functions/manage-clinic-users` with JWT verification enabled.
 - `../functions/manage-saas` with JWT verification enabled.
 - `../functions/manage-clinic-domain` with JWT verification enabled.
+- `../functions/self-serve-signup` with JWT verification disabled; it is a public signup endpoint with server-side validation, rate limiting, honeypot protection, constrained tenant provisioning, and server-only Vercel/Supabase admin credentials.
 - `../functions/public-booking` with JWT verification disabled; it performs its own server-side clinic, schedule, rate-limit, doctor and treatment validation.
 - `../functions/claim-initial-admin` is intentionally closed and returns HTTP 410; bootstrap is not part of the product anymore.
 
@@ -85,7 +86,9 @@ The platform currently uses `billing_provider = manual` until a payment processo
 
 Custom domains are provider-backed through the authenticated `manage-clinic-domain` Edge Function. The database stores lifecycle state while Vercel remains authoritative for project-domain ownership, DNS readiness, and TLS provisioning. Starter does not include custom domains; Pro and Enterprise do.
 
-Before enabling this function in an environment, configure the Edge Function secret `VERCEL_TOKEN` with a Vercel token scoped to the LunaDent project/team. The function also accepts optional `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID`, and `LUNADENT_PLATFORM_DOMAIN` overrides. Never expose `VERCEL_TOKEN` to Vite/frontend environment variables.
+Before enabling domain provisioning in an environment, configure the Edge Function secret `VERCEL_TOKEN` with a Vercel token scoped to the LunaDent project/team. The same secret is used by `manage-clinic-domain` and `self-serve-signup`. The functions also accept optional `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID`, and `LUNADENT_PLATFORM_DOMAIN` overrides. Never expose `VERCEL_TOKEN` to Vite/frontend environment variables.
+
+Self-serve checkout is intentionally a prototype: it creates an active 30-day subscription with `billing_provider = 'demo'` and does not charge a card. Replace this lifecycle with a real payment provider before representing billing as automated production billing. Each self-serve clinic receives a Vercel-managed project domain shaped like `clinic-<slug>-lunadent.vercel.app`; because it is attached as a project domain rather than a deployment-only alias, it follows future production deployments automatically.
 
 Public API access and multi-location operation remain disabled until their own provisioning infrastructure is connected.
 

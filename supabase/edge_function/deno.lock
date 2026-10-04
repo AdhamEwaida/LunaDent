@@ -6,6 +6,7 @@
     "jsr:@supabase/functions-js@*": "2.117.2",
     "npm:@supabase/supabase-js@*": "2.117.2",
     "npm:@supabase/supabase-js@2": "2.117.2",
+    "npm:@supabase/supabase-js@2.117.2": "2.117.2",
     "npm:openai@^4.52.5": "4.104.0"
   },
   "jsr": {

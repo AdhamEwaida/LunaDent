@@ -41,6 +41,7 @@ export default function SaasLanding() {
   const { isSuperAdmin, role } = useAuth();
   const [themes, setThemes] = useState<ThemeDefinition[]>([]);
   const [plans, setPlans] = useState<SaasPlan[]>([]);
+  const [selectedTheme, setSelectedTheme] = useState("modern");
   const [lead, setLead] = useState({ full_name: "", clinic_name: "", email: "", phone: "", message: "" });
   const [leadState, setLeadState] = useState<"idle" | "sending" | "sent">("idle");
   const [leadError, setLeadError] = useState("");
@@ -91,9 +92,14 @@ export default function SaasLanding() {
             <a href="#pricing">Pricing</a>
             <a href="#demo">Request Demo</a>
           </nav>
-          <Link to={dashboardHref} className="px-4 py-2.5 rounded-xl bg-white text-slate-950 text-sm font-semibold">
-            {dashboardLabel}
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link to={dashboardHref} className="hidden sm:inline-flex px-4 py-2.5 rounded-xl border border-white/15 text-sm font-semibold text-white">
+              {dashboardLabel}
+            </Link>
+            <Link to="/start" className="px-4 py-2.5 rounded-xl bg-white text-slate-950 text-sm font-semibold">
+              Start Clinic
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -112,10 +118,10 @@ export default function SaasLanding() {
                 Sell a complete digital clinic experience: operations, patient portal, accounting, staff access and a customizable branded website for every clinic.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <a href="#demo" className="px-6 py-3.5 rounded-xl bg-violet-500 hover:bg-violet-400 font-semibold inline-flex items-center gap-2">
+                <Link to="/start?theme=modern&plan=pro" className="px-6 py-3.5 rounded-xl bg-violet-500 hover:bg-violet-400 font-semibold inline-flex items-center gap-2">
                   Start a clinic <ArrowRight size={17} />
-                </a>
-                <a href="#themes" className="px-6 py-3.5 rounded-xl border border-white/15 bg-white/5 font-semibold">Explore themes</a>
+                </Link>
+                <a href="#themes" className="px-6 py-3.5 rounded-xl border border-white/15 bg-white/5 font-semibold">Explore live themes</a>
               </div>
               <div className="mt-9 flex flex-wrap gap-x-6 gap-y-3 text-sm text-slate-400">
                 <span className="inline-flex items-center gap-2"><Check size={15} /> Multi-tenant</span>
@@ -175,28 +181,40 @@ export default function SaasLanding() {
               <Globe2 size={44} className="text-slate-300" />
             </div>
             <div className="grid lg:grid-cols-3 gap-5 mt-12">
-              {themes.map((theme)=>(
-                <div key={theme.key} className="rounded-[28px] border overflow-hidden bg-white shadow-sm">
-                  <div className="h-52 p-5" style={{background:`linear-gradient(135deg,${themeAccent[theme.key] || "#475569"}18,${themeAccent[theme.key] || "#475569"}55)`}}>
-                    <div className="h-full rounded-2xl bg-white/90 border p-4 flex flex-col">
-                      <div className="h-3 w-28 rounded-full" style={{background:themeAccent[theme.key] || "#475569"}} />
-                      <div className="mt-auto">
-                        <div className="h-5 w-3/4 bg-slate-900 rounded mb-2" />
-                        <div className="h-2 w-full bg-slate-200 rounded mb-1" />
-                        <div className="h-2 w-2/3 bg-slate-200 rounded" />
+              {themes.map((theme)=>{
+                const selected = selectedTheme === theme.key;
+                return (
+                  <div key={theme.key} className={`rounded-[28px] border overflow-hidden bg-white shadow-sm transition ${selected ? "ring-2 ring-violet-500 border-violet-400" : ""}`}>
+                    <div className="h-52 p-5" style={{background:`linear-gradient(135deg,${themeAccent[theme.key] || "#475569"}18,${themeAccent[theme.key] || "#475569"}55)`}}>
+                      <div className="h-full rounded-2xl bg-white/90 border p-4 flex flex-col">
+                        <div className="h-3 w-28 rounded-full" style={{background:themeAccent[theme.key] || "#475569"}} />
+                        <div className="mt-auto">
+                          <div className="h-5 w-3/4 bg-slate-900 rounded mb-2" />
+                          <div className="h-2 w-full bg-slate-200 rounded mb-1" />
+                          <div className="h-2 w-2/3 bg-slate-200 rounded" />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-6">
+                      <div className="flex items-center justify-between gap-3">
+                        <h3 className="text-xl font-bold">{theme.name}</h3>
+                        {selected ? <span className="text-[11px] px-2 py-1 rounded-full bg-violet-100 text-violet-800 font-semibold">Selected</span> : theme.premium && <span className="text-[11px] px-2 py-1 rounded-full bg-amber-100 text-amber-800 font-semibold">Premium</span>}
+                      </div>
+                      <p className="text-sm text-slate-600 mt-2 min-h-10">{theme.description}</p>
+                      <div className="mt-5 grid grid-cols-2 gap-2">
+                        <button type="button" onClick={()=>setSelectedTheme(theme.key)} className="rounded-xl border px-3 py-2.5 text-sm font-semibold">
+                          {selected ? "Selected" : "Choose theme"}
+                        </button>
+                        <Link to={`/demo/theme/${theme.key}`} className="rounded-xl bg-slate-950 px-3 py-2.5 text-center text-sm font-semibold text-white">
+                          Live demo
+                        </Link>
                       </div>
                     </div>
                   </div>
-                  <div className="p-6">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-xl font-bold">{theme.name}</h3>
-                      {theme.premium && <span className="text-[11px] px-2 py-1 rounded-full bg-amber-100 text-amber-800 font-semibold">Premium</span>}
-                    </div>
-                    <p className="text-sm text-slate-600 mt-2">{theme.description}</p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
+            <div className="mt-5 text-center text-sm text-slate-500">Selected theme: <b className="text-slate-900">{themes.find((theme)=>theme.key===selectedTheme)?.name || "Modern"}</b>. Choose a plan below to continue.</div>
           </div>
         </section>
 
@@ -206,25 +224,35 @@ export default function SaasLanding() {
             <h2 className="text-4xl md:text-5xl font-bold mt-3">Choose the operating level that fits the clinic.</h2>
           </div>
           <div className="grid lg:grid-cols-3 gap-5 mt-12">
-            {plans.map((plan)=>(
-              <div key={plan.code} className={`rounded-3xl border p-7 ${plan.code==="pro"?"border-violet-400 bg-violet-500/10":"border-white/10 bg-white/[.04]"}`}>
-                <div className="font-bold text-xl">{plan.name}</div>
-                <p className="text-sm text-slate-400 mt-2 min-h-10">{plan.description}</p>
-                <div className="mt-6"><span className="text-4xl font-black">{plan.currency === "USD" ? "$" : ""}{Number(plan.price_monthly).toFixed(0)}</span><span className="text-slate-400"> / month</span></div>
-                <div className="mt-6 space-y-2 text-sm text-slate-300">
-                  {Object.entries(plan.features || {}).filter(([,enabled])=>enabled).map(([key])=>(
-                    <div key={key} className="flex items-center gap-2"><Check size={14} className="text-emerald-300" />{featureLabels[key] || key.replaceAll("_"," ")}</div>
-                  ))}
-                  {Object.entries(plan.limits || {}).filter(([key])=>key in limitLabels).map(([key,value])=>(
-                    <div key={key} className="flex items-center gap-2 text-slate-400"><Check size={14} />Up to {value} {limitLabels[key]}</div>
-                  ))}
-                  <a href="#demo" className="mt-6 inline-flex w-full items-center justify-center rounded-xl border border-white/15 px-4 py-3 font-semibold text-white hover:bg-white/5">
-                    Request {plan.name}
-                  </a>
+            {plans.map((plan)=>{
+              const compatible = selectedTheme === "modern" || Boolean(plan.features?.all_themes);
+              return (
+                <div key={plan.code} className={`rounded-3xl border p-7 ${plan.code==="pro"?"border-violet-400 bg-violet-500/10":"border-white/10 bg-white/[.04]"} ${compatible?"":"opacity-60"}`}>
+                  <div className="font-bold text-xl">{plan.name}</div>
+                  <p className="text-sm text-slate-400 mt-2 min-h-10">{plan.description}</p>
+                  <div className="mt-6"><span className="text-4xl font-black">{plan.currency === "USD" ? "$" : ""}{Number(plan.price_monthly).toFixed(0)}</span><span className="text-slate-400"> / month</span></div>
+                  <div className="mt-6 space-y-2 text-sm text-slate-300">
+                    {Object.entries(plan.features || {}).filter(([,enabled])=>enabled).map(([key])=>(
+                      <div key={key} className="flex items-center gap-2"><Check size={14} className="text-emerald-300" />{featureLabels[key] || key.replaceAll("_"," ")}</div>
+                    ))}
+                    {Object.entries(plan.limits || {}).filter(([key])=>key in limitLabels).map(([key,value])=>(
+                      <div key={key} className="flex items-center gap-2 text-slate-400"><Check size={14} />Up to {value} {limitLabels[key]}</div>
+                    ))}
+                    {compatible ? (
+                      <Link to={`/start?plan=${encodeURIComponent(plan.code)}&theme=${encodeURIComponent(selectedTheme)}`} className="mt-6 inline-flex w-full items-center justify-center rounded-xl border border-white/15 px-4 py-3 font-semibold text-white hover:bg-white/5">
+                        Choose {plan.name}
+                      </Link>
+                    ) : (
+                      <button type="button" onClick={()=>setSelectedTheme("modern")} className="mt-6 w-full rounded-xl border border-amber-300/30 px-4 py-3 font-semibold text-amber-200">
+                        Use Modern with {plan.name}
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
+          <div className="mt-5 text-center text-xs text-slate-500">Prototype checkout: choosing a plan continues to clinic signup. No real payment is collected yet.</div>
         </section>
 
         <section id="demo" className="bg-gradient-to-br from-violet-600 to-slate-950 py-24">

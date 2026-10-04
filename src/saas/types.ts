@@ -153,6 +153,8 @@ export type ClinicSiteSettings = {
   domain_verified_at?: string | null;
   domain_last_checked_at?: string | null;
   domain_error?: string | null;
+  platform_subdomain?: string | null;
+  platform_subdomain_created_at?: string | null;
   site_title?: string | null;
   tagline?: string | null;
   logo_url?: string | null;
@@ -189,7 +191,7 @@ export type Subscription = {
   plan?: SaasPlan | null;
 };
 
-export type ClinicSiteSummary = Pick<ClinicSiteSettings, "theme_key" | "published" | "custom_domain" | "domain_verified" | "domain_status">;
+export type ClinicSiteSummary = Pick<ClinicSiteSettings, "theme_key" | "published" | "custom_domain" | "domain_verified" | "domain_status" | "platform_subdomain">;
 
 export type DomainVerificationRecord = {
   type?: string;
@@ -256,4 +258,34 @@ export type ClinicEntitlements = {
   trial_ends_at?: string | null;
   current_period_end?: string | null;
   plan: (Omit<SaasPlan, "id"> & { id?: string }) | null;
+};
+
+export type SelfServeSignupInput = {
+  owner_name: string;
+  clinic_name: string;
+  email: string;
+  password: string;
+  plan_code: string;
+  theme_key: string;
+  timezone: string;
+  currency: string;
+  terms_accepted: boolean;
+  demo_checkout_acknowledged: boolean;
+  website?: string;
+};
+
+export type SelfServeSignupResult = {
+  ok: boolean;
+  clinic: {
+    id: string;
+    slug: string;
+    platform_subdomain: string;
+    plan_code: string;
+    theme_key: string;
+  };
+  site_url: string;
+  session: {
+    access_token: string;
+    refresh_token: string;
+  };
 };

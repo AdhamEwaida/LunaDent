@@ -8,6 +8,8 @@ import type {
   ClinicSiteSettings,
   PublicClinicSite,
   SaasPlan,
+  SelfServeSignupInput,
+  SelfServeSignupResult,
   ThemeDefinition,
 } from "./types";
 
@@ -89,20 +91,32 @@ export const saasRepository = {
     const hostname = domain.trim().toLowerCase().replace(/\.$/, "");
     if (!hostname) return null;
 
-    const { data: settings, error: settingsError } = await db
+    const { data: managedSite, error: managedError } = await db
       .from("clinic_site_settings")
       .select("clinic_id")
-      .eq("custom_domain", hostname)
-      .eq("domain_verified", true)
+      .eq("platform_subdomain", hostname)
       .eq("published", true)
       .maybeSingle();
-    if (settingsError) throw settingsError;
-    if (!settings?.clinic_id) return null;
+    if (managedError) throw managedError;
+
+    let clinicId = managedSite?.clinic_id || null;
+    if (!clinicId) {
+      const { data: customSite, error: customError } = await db
+        .from("clinic_site_settings")
+        .select("clinic_id")
+        .eq("custom_domain", hostname)
+        .eq("domain_verified", true)
+        .eq("published", true)
+        .maybeSingle();
+      if (customError) throw customError;
+      clinicId = customSite?.clinic_id || null;
+    }
+    if (!clinicId) return null;
 
     const { data: clinic, error: clinicError } = await db
       .from("clinics")
       .select("*")
-      .eq("id", settings.clinic_id)
+      .eq("id", clinicId)
       .in("status", ["trialing", "active"])
       .maybeSingle();
     if (clinicError) throw clinicError;
@@ -255,6 +269,30 @@ export const saasRepository = {
     if (error) throw error;
     if (data?.error) throw new Error(String(data.error));
     return data;
+  },
+
+  async selfServeSignup(input: SelfServeSignupInput): Promise<SelfServeSignupResult> {
+    const db = requireSupabase();
+    const { data, error } = await db.functions.invoke("self-serve-signup", {
+      body: input,
+    });
+    if (data?.error) throw new Error(String(data.error));
+    if (error) {
+      let message = error.message || "Unable to create the clinic.";
+      const context = typeof error === "object" && error !== null && "context" in error
+        ? (error as { context?: unknown }).context
+        : undefined;
+      if (context instanceof Response) {
+        try {
+          const payload = await context.clone().json();
+          if (payload?.error) message = String(payload.error);
+        } catch {
+          // Keep the transport message.
+        }
+      }
+      throw new Error(message);
+    }
+    return data as SelfServeSignupResult;
   },
 
   async manageClinicDomain(

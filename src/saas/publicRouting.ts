@@ -24,19 +24,25 @@ export function getCustomDomainHostname() {
   const hostname = normalizeHostname(window.location.hostname);
   if (!hostname) return null;
   if (platformHosts().has(hostname)) return null;
-  if (hostname.endsWith(".vercel.app") || hostname.endsWith(".localhost") || hostname.endsWith(".local")) return null;
+  if (hostname.endsWith(".localhost") || hostname.endsWith(".local")) return null;
+  if (hostname.endsWith(".vercel.app")) {
+    return /^clinic-[a-z0-9-]+-lunadent\.vercel\.app$/.test(hostname) ? hostname : null;
+  }
   return hostname;
 }
 
 export function clinicPublicHref(site: PublicClinicSite, suffix = "") {
   const customHostname = getCustomDomainHostname();
   const configuredDomain = normalizeHostname(site.settings.custom_domain || "");
+  const managedDomain = normalizeHostname(site.settings.platform_subdomain || "");
   const cleanSuffix = suffix ? (suffix.startsWith("/") ? suffix : `/${suffix}`) : "";
 
   if (
     customHostname &&
-    site.settings.domain_verified &&
-    configuredDomain === customHostname
+    (
+      managedDomain === customHostname ||
+      (site.settings.domain_verified && configuredDomain === customHostname)
+    )
   ) {
     return cleanSuffix || "/";
   }

@@ -14,6 +14,8 @@ const CompletePatientProfile = lazy(() => import("@/pages/patient/Signup").then(
 const AdminDashboardPage = lazy(() => import("@/pages/AdminDashboard"));
 const AccountingLive = lazy(() => import("@/pages/AccountingLive"));
 const SaasLanding = lazy(() => import("@/pages/SaasLanding"));
+const StartClinic = lazy(() => import("@/pages/StartClinic"));
+const ThemeDemo = lazy(() => import("@/pages/ThemeDemo"));
 const SuperAdmin = lazy(() => import("@/pages/SuperAdmin"));
 const ClinicSite = lazy(() => import("@/pages/ClinicSite"));
 const ClinicBooking = lazy(() => import("@/pages/ClinicBooking"));
@@ -69,6 +71,8 @@ export default function App() {
           <Suspense fallback={<RouteFallback />}>
             <Routes>
               <Route path="/" element={customDomainHost ? <ClinicSite /> : <SaasLanding />} />
+              {!customDomainHost && <Route path="/start" element={<StartClinic />} />}
+              {!customDomainHost && <Route path="/demo/theme/:themeKey" element={<ThemeDemo />} />}
               <Route path="/super-admin" element={<SuperAdminRoute><SuperAdmin /></SuperAdminRoute>} />
 
               {customDomainHost && <>

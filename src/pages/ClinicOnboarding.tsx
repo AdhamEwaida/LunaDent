@@ -22,7 +22,7 @@ const steps = [
   { label: "Theme", description: "Choose the website layout" },
   { label: "Branding", description: "Colors, logo and hero image" },
   { label: "Website", description: "Your opening message and CTA" },
-  { label: "Review", description: "Save the draft and enter LunaDent" },
+  { label: "Launch", description: "Publish your starter website and open LunaDent" },
 ] as const;
 
 const allowedImageTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/avif", "image/gif"]);
@@ -184,6 +184,10 @@ export default function ClinicOnboarding() {
     );
   }
 
+  const includedClinicUrl = settings.platform_subdomain
+    ? `https://${settings.platform_subdomain}`
+    : `https://lunadent.vercel.app/c/${activeClinic.slug}`;
+
   const buildTokens = (): SiteTokens => {
     if (!selected) return settings.tokens || {};
     const preserveCurrentTheme = settings.theme_key === selected.key;
@@ -327,7 +331,7 @@ export default function ClinicOnboarding() {
         hero_image_url: heroUrl,
         tokens: buildTokens(),
         content: buildContent(),
-        published: false,
+        published: complete,
       }),
     ]);
 
@@ -399,7 +403,7 @@ export default function ClinicOnboarding() {
           <div className="mt-4 text-xs font-semibold uppercase tracking-[.2em] text-violet-300">LunaDent Clinic Setup</div>
           <h1 className="mt-2 text-3xl font-black md:text-4xl">Set up {activeClinic.name}</h1>
           <p className="mt-2 text-sm text-slate-400">
-            Build a useful clinic workspace and a polished draft website before your team starts working.
+            Set the clinic basics, then LunaDent launches a starter website you can keep editing anytime.
           </p>
         </div>
 
@@ -611,7 +615,7 @@ export default function ClinicOnboarding() {
                   <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-100 text-emerald-700"><Check size={28} /></div>
                   <h2 className="mt-5 text-3xl font-black">Your clinic foundation is ready</h2>
                   <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-slate-500">
-                    Finishing setup opens Website Builder, but the public website stays Draft until you explicitly publish it.
+                    Finishing setup publishes this starter website and opens Website Builder so you can keep refining it.
                   </p>
                 </div>
 
@@ -629,7 +633,7 @@ export default function ClinicOnboarding() {
                       <div className="h-10 w-10 rounded-xl" style={{ background: validHex(primary) ? primary : "#2457C5" }} />
                       <div>
                         <div className="font-bold">{selected?.name || selectedTheme}</div>
-                        <div className="text-xs text-slate-500">Draft · not public yet</div>
+                        <div className="text-xs text-slate-500">Ready to publish when you finish</div>
                       </div>
                     </div>
                     <div className="mt-3 text-sm text-slate-600">{heroTitle}</div>
@@ -644,18 +648,18 @@ export default function ClinicOnboarding() {
                   </div>
 
                   <div className="rounded-2xl border p-4">
-                    <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.12em] text-slate-400"><Globe2 size={14} /> Domain</div>
-                    <div className="mt-2 font-bold">{customDomainEnabled ? "Custom domain available" : "LunaDent clinic URL"}</div>
-                    <div className="mt-1 text-xs leading-5 text-slate-500">
+                    <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.12em] text-slate-400"><Globe2 size={14} /> Clinic URL</div>
+                    <div className="mt-2 break-all font-mono text-xs font-bold text-slate-800">{includedClinicUrl}</div>
+                    <div className="mt-2 text-xs leading-5 text-slate-500">
                       {customDomainEnabled
-                        ? "Connect and verify your own domain from Website Builder after setup."
-                        : "Your clinic can launch on its LunaDent URL. Custom domains are available on eligible plans."}
+                        ? "This managed LunaDent URL is included. You can also connect your own custom domain later from Website Builder."
+                        : "This managed LunaDent URL is included with the clinic and goes live when you finish setup."}
                     </div>
                   </div>
                 </div>
 
                 <div className="mx-auto mt-5 max-w-4xl rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
-                  Next, review treatments and doctors, set business hours, refine the website, connect a domain if available, and publish only when the clinic is ready.
+                  After launch, open the workspace to manage treatments, doctors, business hours, staff, branding, and the website anytime.
                 </div>
               </section>
             )}
@@ -686,7 +690,7 @@ export default function ClinicOnboarding() {
                   disabled={saving}
                   className="rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
                 >
-                  {saving ? "Finishing..." : "Finish setup & open Website Builder"}
+                  {saving ? "Launching..." : "Launch clinic & open Website Builder"}
                 </button>
               )}
             </div>
