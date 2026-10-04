@@ -471,7 +471,7 @@ export default function SiteBuilder() {
 
           <section className="rounded-2xl border bg-white p-5">
             <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 font-bold"><Globe2 size={17}/>Custom domain</div>
+              <div className="flex items-center gap-2 font-bold"><Globe2 size={17}/>Clinic domain</div>
               <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
                 effectiveDomainState.verified
                   ? "bg-emerald-50 text-emerald-700"
@@ -483,12 +483,25 @@ export default function SiteBuilder() {
               </span>
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              Connect a domain you already own. LunaDent provisions it on Vercel, checks DNS, and keeps the clinic tenant mapping in Supabase.
+              Every clinic gets a managed LunaDent address on Vercel. Connecting a domain you already own can be enabled later without changing the clinic website.
             </p>
 
             {!customDomainEnabled ? (
-              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-                Custom domains are available on Pro and Enterprise. Your LunaDent clinic URL remains available on the current plan.
+              <div className="mt-4 rounded-xl border bg-slate-50 p-3 text-xs text-slate-700">
+                <div className="font-semibold text-slate-900">Included LunaDent address</div>
+                {settings.platform_subdomain ? (
+                  <a
+                    href={`https://${settings.platform_subdomain}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1 inline-flex items-center gap-1.5 break-all font-mono text-violet-700"
+                  >
+                    {settings.platform_subdomain} <ExternalLink size={12}/>
+                  </a>
+                ) : (
+                  <div className="mt-1 text-slate-500">Your managed clinic address will appear here after provisioning.</div>
+                )}
+                <div className="mt-2 text-slate-500">Bring-your-own-domain setup is intentionally paused in this prototype.</div>
               </div>
             ) : (
               <div className="mt-4 space-y-3">
